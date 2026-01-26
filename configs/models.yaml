@@ -1,6 +1,7 @@
 models:
+  # ==================== Qwen Models ====================
   qwen3-vl-30b:
-    provider: huggingface
+    provider: huggingface  # Will auto-resolve to 'qwen'
     model_id: qwen3-vl-30b
     model_name: "Qwen/Qwen3-VL-30B-A3B-Instruct"
     model_type: vision-language
@@ -9,27 +10,9 @@ models:
       device_map: "auto"
       attn_implementation: "flash_attention_2"
 
-  deepseek-vl2-small:
-    provider: deepseek
-    model_id: deepseek-vl2-small
-    model_name: "deepseek-ai/deepseek-vl2-small"
-    model_type: vision-language
-    config:
-      dtype: "bfloat16"
-      device_map: "auto"
-
-  gpt-4o:
-    provider: openai
-    model_id: gpt-4o
-    model_name: "gpt-4o"
-    model_type: vision-language
-    config:
-      api_key_env: "OPENAI_API_KEY"
-      base_url_env: "OPENAI_BASE_URL"
-      max_tokens: 4096
-
   qwen2-vl-2b-instruct:
-    provider: huggingface
+    provider: huggingface  # Will auto-resolve to 'qwen'
+    # Or explicitly specify: provider_specific: qwen
     model_id: qwen2-vl-2b-instruct
     model_name: "Qwen/Qwen2-VL-2B-Instruct"
     model_type: vision-language
@@ -39,10 +22,77 @@ models:
       attn_implementation: "flash_attention_2"
       quantization:
         load_in_4bit: true
-        bnb_4bit_compute_dtype: "bfloat16"
         bnb_4bit_quant_type: "nf4"
         bnb_4bit_use_double_quant: true
       max_memory:
-        0: "3.0GiB"
+        0: "2.5GiB"
         cpu: "10GiB"
 
+  # ==================== LightOn Models ====================
+  lighton-ocr-2b:
+    provider: huggingface  # Will auto-resolve to 'lighton'
+    model_id: lighton-ocr-2b
+    model_name: "lightonai/LightOnOCR-2-1B-base"
+    model_type: vision-language
+    config:
+      dtype: "bfloat16"
+      device_map: "auto"
+      quantization:
+        load_in_4bit: true
+        bnb_4bit_quant_type: "nf4"
+        bnb_4bit_use_double_quant: true
+      max_memory:
+        0: "2.5GiB"
+        cpu: "10GiB"
+
+  # ==================== LLaVA Models ====================
+  llava-1.5-7b:
+    provider: huggingface  # Will auto-resolve to 'llava'
+    model_id: llava-1.5-7b
+    model_name: "llava-hf/llava-1.5-7b-hf"
+    model_type: vision-language
+    config:
+      dtype: "float16"
+      device_map: "auto"
+
+  # ==================== DeepSeek Models ====================
+  deepseek-vl2-small:
+    provider: deepseek  # Direct provider
+    model_id: deepseek-vl2-small
+    model_name: "deepseek-ai/deepseek-vl2-small"
+    model_type: vision-language
+    config:
+      dtype: "bfloat16"
+      device_map: "auto"
+
+  # ==================== Cloud API Models ====================
+  gpt-4o:
+    provider: openai
+    model_id: gpt-4o
+    model_name: "gpt-4o"
+    model_type: vision-language
+    config:
+      api_key_env: "OPENAI_API_KEY"  # Will be resolved to actual env var
+      base_url_env: "OPENAI_BASE_URL"  # Optional
+      max_tokens: 4096
+      temperature: 0.7
+
+  gemini-2.0-flash:
+    provider: google
+    model_id: gemini-2.0-flash
+    model_name: "gemini-2.0-flash-exp"
+    model_type: vision-language
+    config:
+      api_key_env: "GOOGLE_API_KEY"
+      max_tokens: 8192
+
+  # ==================== Template for New Models ====================
+  # custom-model:
+  #   provider: huggingface
+  #   provider_specific: qwen  # Optional: explicitly specify which loader to use
+  #   model_id: custom-model
+  #   model_name: "namespace/model-name"
+  #   model_type: vision-language
+  #   config:
+  #     dtype: "bfloat16"
+  #     device_map: "auto"
