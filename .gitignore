@@ -1,0 +1,5 @@
+.agent/
+.venv/
+GEMINI.md
+unisensoryai.egg-info/
+_pycache__

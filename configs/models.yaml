@@ -1,0 +1,40 @@
+models:
+  qwen3-vl-30b:
+    provider: huggingface
+    model_id: qwen3-vl-30b
+    model_name: "Qwen/Qwen3-VL-30B-A3B-Instruct"
+    model_type: vision-language
+    config:
+      dtype: "bfloat16"
+      device_map: "auto"
+      attn_implementation: "flash_attention_2"
+
+  deepseek-vl2-small:
+    provider: deepseek
+    model_id: deepseek-vl2-small
+    model_name: "deepseek-ai/deepseek-vl2-small"
+    model_type: vision-language
+    config:
+      dtype: "bfloat16"
+      device_map: "auto"
+
+  gpt-4o:
+    provider: openai
+    model_id: gpt-4o
+    model_name: "gpt-4o"
+    model_type: vision-language
+    config:
+      api_key_env: "OPENAI_API_KEY"
+      base_url_env: "OPENAI_BASE_URL"
+      max_tokens: 4096
+
+  qwen2-vl-2b-instruct:
+    provider: huggingface
+    model_id: qwen2-vl-2b-instruct
+    model_name: "Qwen/Qwen2-VL-2B-Instruct"
+    model_type: vision-language
+    config:
+      dtype: "bfloat16"
+      device_map: "auto"
+      attn_implementation: "flash_attention_2"
+

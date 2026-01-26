@@ -1,0 +1,18 @@
+pipelines:
+  basic:
+    description: "Basic document processing pipeline"
+    stages:
+      - ingestion
+      - parsing
+      - formatting
+  
+  advanced:
+    description: "Advanced pipeline with validation and routing"
+    stages:
+      - ingestion
+      - validation
+      - routing
+      - parsing
+      - content_validation
+      - enrichment
+      - formatting
