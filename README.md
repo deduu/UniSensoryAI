@@ -170,4 +170,4 @@ See [GEMINI.md](GEMINI.md) for detailed architecture documentation and developme
 
 ## License
 
-[Your License Here]
+MIT
