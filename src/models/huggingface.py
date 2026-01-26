@@ -28,12 +28,75 @@ class HuggingFaceModel(BaseVisionLanguageModel):
             dtype = torch.float32
 
         # Note: In a real scenario, we might want to catch OOM errors here
+        quantization_config = None
+        quant_settings = self.config.get("config", {}).get("quantization")
+        
+        if quant_settings and quant_settings.get("load_in_4bit"):
+            try:
+                from transformers import BitsAndBytesConfig
+                print("Loading model with 4-bit quantization...")
+                quantization_config = BitsAndBytesConfig(
+                    load_in_4bit=True,
+                    bnb_4bit_compute_dtype=dtype,
+                    bnb_4bit_quant_type=quant_settings.get("bnb_4bit_quant_type", "nf4"),
+                    bnb_4bit_use_double_quant=quant_settings.get("bnb_4bit_use_double_quant", False)
+                )
+            except ImportError:
+                print("WARNING: bitsandbytes not found. Skipping 4-bit quantization.")
+
+        # Prepare loading kwargs
+        load_kwargs = {
+            "device_map": self.device_map,
+            "torch_dtype": dtype,
+            "trust_remote_code": True,
+            "low_cpu_mem_usage": True,
+            "offload_buffers": True,  # Help with memory management
+        }
+        
+        if quantization_config:
+            load_kwargs["quantization_config"] = quantization_config
+            
+        # Add max_memory from config if present
+        max_memory_config = self.config.get("config", {}).get("max_memory")
+        if max_memory_config:
+            # Convert keys to int if possible (for GPU IDs)
+            max_memory = {}
+            for k, v in max_memory_config.items():
+                try:
+                   key = int(k)
+                except ValueError:
+                   key = k
+                max_memory[key] = v
+            load_kwargs["max_memory"] = max_memory
+            print(f"Applying max_memory limit: {max_memory}")
+
         self.model = AutoModelForImageTextToText.from_pretrained(
             self.model_name,
-            device_map=self.device_map,
-            torch_dtype=dtype,
-            trust_remote_code=True
+            **load_kwargs
         )
+        
+        # OOM prevention: disable cache and enable gradient checkpointing
+        self.model.config.use_cache = False
+        if hasattr(self.model, 'gradient_checkpointing_enable'):
+            self.model.gradient_checkpointing_enable()
+            print("Enabled gradient checkpointing for memory efficiency")
+        
+        # Cleanup and Logging
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            reserved = torch.cuda.memory_reserved() / 1024**3
+            allocated = torch.cuda.memory_allocated() / 1024**3
+            print(f"CUDA Memory: Allocated: {allocated:.2f} GB | Reserved: {reserved:.2f} GB")
+        
+        # Verification logging
+        model_size = self.model.get_memory_footprint()
+        print(f"Model loaded. Memory footprint (Weights): {model_size / 1024**3:.2f} GB")
+        if hasattr(self.model, "is_quantized"):
+             print(f"Is quantized: {self.model.is_quantized}")
+        
+        if quantization_config:
+            print(f"Quantization config used: {quantization_config.to_dict()}")
+            
         self.processor = AutoProcessor.from_pretrained(
             self.model_name, 
             trust_remote_code=True
@@ -62,6 +125,12 @@ class HuggingFaceModel(BaseVisionLanguageModel):
             
         if not img_obj:
              return {"error": "Invalid image input"}
+
+        # Resize image to reduce memory usage
+        max_size = kwargs.get("max_image_size", 768)
+        if max(img_obj.size) > max_size:
+            img_obj.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
+            print(f"Resized image to {img_obj.size} to reduce memory usage")
 
         # Prepare conversation for Qwen2-VL styling
         messages = [
@@ -103,8 +172,22 @@ class HuggingFaceModel(BaseVisionLanguageModel):
             
         inputs = inputs.to(self.model.device)
 
-        # Inference
-        generated_ids = self.model.generate(**inputs, max_new_tokens=1024)
+        # Extract generation parameters from kwargs
+        max_new_tokens = kwargs.get("max_new_tokens", 256)  # Reduced default from 1024
+        temperature = kwargs.get("temperature", 0.7)
+        top_p = kwargs.get("top_p", 0.9)
+        do_sample = kwargs.get("do_sample", True)
+        
+        # Inference with memory-efficient settings
+        with torch.inference_mode():  # More efficient than torch.no_grad()
+            generated_ids = self.model.generate(
+                **inputs,
+                max_new_tokens=max_new_tokens,
+                temperature=temperature,
+                top_p=top_p,
+                do_sample=do_sample,
+                use_cache=False,  # Disable KV cache to save memory
+            )
         
         # Trim input tokens
         generated_ids_trimmed = [
@@ -114,5 +197,10 @@ class HuggingFaceModel(BaseVisionLanguageModel):
         output_text = self.processor.batch_decode(
             generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
         )[0]
+
+        # Clear memory after inference
+        del inputs, generated_ids, generated_ids_trimmed
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
         return {"content": output_text}

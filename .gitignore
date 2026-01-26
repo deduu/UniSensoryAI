@@ -3,3 +3,5 @@
 GEMINI.md
 unisensoryai.egg-info/
 _pycache__
+
+src/models/__pycache__/
