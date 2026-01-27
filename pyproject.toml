@@ -38,6 +38,9 @@ dependencies = [
     "torchvision>=0.16.0",
     "nvitop>=1.6.1",
     "bitsandbytes>=0.43.0",
+    "sqlalchemy>=2.0.0",
+    "asyncpg>=0.29.0",
+    "alembic>=1.13.0",
 ]
 
 [project.optional-dependencies]

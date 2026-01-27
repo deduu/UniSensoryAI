@@ -1,18 +1,54 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException, Form
+from fastapi import FastAPI, UploadFile, File, HTTPException, Form, Depends
 from fastapi.responses import JSONResponse
 from pathlib import Path
 from typing import Optional, Dict, Any
 import tempfile
-import json
+import shutil
+import os
+import logging
+from contextlib import asynccontextmanager
 
 from src.utils.config import ConfigLoader
 from src.models import ModelLoader
 from src.core.document import Document, DocumentType
 
+# DB and Queuing imports
+from src.db.session import init_db, get_db, session_manager
+from src.ingestion import init_ingestion_queue, get_ingestion_queue
+from src.ingestion.processor import process_document_job
+from src.services.ingestion import IngestionService
+from src.db.models.ingestion import IngestionStatus
+
+# Setup logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("api")
+
+# Load environment configs
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://postgres:postgres@localhost:5433/unisensory")
+UPLOAD_DIR = Path("data/uploads")
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    logger.info("Initializing Database...")
+    init_db(DATABASE_URL)
+    
+    logger.info("Initializing Ingestion Queue...")
+    queue = init_ingestion_queue(process_document_job)
+    await queue.start_worker()
+    
+    yield
+    
+    # Shutdown
+    logger.info("Shutting down Ingestion Queue...")
+    await queue.stop_worker()
+
 app = FastAPI(
     title="UniSensoryAI Document Processing API",
     description="OpenAI-compatible API for multi-modal document understanding",
-    version="0.1.0"
+    version="0.1.0",
+    lifespan=lifespan
 )
 
 @app.get("/")
@@ -24,123 +60,73 @@ async def root():
 async def process_document(
     file: UploadFile = File(...),
     model_id: Optional[str] = Form("qwen3-vl-30b"),
-    output_format: Optional[str] = Form("json")
+    # output_format: Optional[str] = Form("json") # Handled in retrieval now
 ) -> JSONResponse:
     """
-    Process a document using the specified model.
-    
-    Args:
-        file: Uploaded document file.
-        model_id: Model to use for processing (default: qwen3-vl-30b).
-        output_format: Output format - 'json' or 'markdown' (default: json).
-        
-    Returns:
-        JSONResponse containing extracted content.
+    Submit a document for asynchronous processing.
     """
     try:
-        # Save uploaded file to temporary location
-        with tempfile.NamedTemporaryFile(delete=False, suffix=Path(file.filename).suffix) as tmp_file:
-            content = await file.read()
-            tmp_file.write(content)
-            tmp_path = Path(tmp_file.name)
+        # Save file to persistent storage
+        file_path = UPLOAD_DIR / file.filename
+        # Avoid overwriting or collision in prod, but for dev filename is ok
+        # Ideally use uuid
         
-        # Detect document type from extension
-        ext = tmp_path.suffix.lower()
-        doc_type_map = {
-            ".pdf": DocumentType.PDF,
-            ".xlsx": DocumentType.EXCEL,
-            ".xls": DocumentType.EXCEL,
-            ".docx": DocumentType.WORD,
-            ".pptx": DocumentType.POWERPOINT,
-            ".png": DocumentType.IMAGE,
-            ".jpg": DocumentType.IMAGE,
-            ".jpeg": DocumentType.IMAGE,
-        }
-        doc_type = doc_type_map.get(ext, DocumentType.UNKNOWN)
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+            
+        # Enqueue
+        queue = get_ingestion_queue()
+        # meta can pass model preference
+        job_id = await queue.enqueue(str(file_path.absolute()), meta={"model_id": model_id})
         
-        # Create document object
-        document = Document(
-            id=file.filename,
-            file_path=tmp_path,
-            document_type=doc_type
+        return JSONResponse(
+            status_code=202,
+            content={
+                "job_id": job_id,
+                "status": "queued",
+                "message": "Document accepted for processing."
+            }
         )
         
-        # Load model
-        model_config = ConfigLoader.get_model_config(model_id)
-        model = ModelLoader.load_model(model_config)
-        
-        # Process Document
-        # In a complete implementation, this would route to an agent. 
-        # Here we directly call the model for testing purposes as requested.
-        
-        prompt = "Analyze this document and extract the whole content."
-        processing_result = model.process(image=document.file_path, prompt=prompt)
-        
-        result = {
-            "document_id": document.id,
-            "document_type": doc_type.value,
-            "model_used": model_id,
-            "status": "success",
-            "extracted_content": processing_result
-        }
-        
-        # Cleanup
-        model.unload()
-        tmp_path.unlink()
-        
-        if output_format == "markdown":
-            # Models return 'content' now, but checking 'text' for backward compat just in case
-            extracted_text = result['extracted_content'].get('content', result['extracted_content'].get('text', ''))
-            markdown_output = f"# {file.filename}\n\n{extracted_text}"
-            return JSONResponse(content={"markdown": markdown_output})
-        
-        return JSONResponse(content=result)
-        
     except Exception as e:
-        import traceback
-        import logging
-        logger = logging.getLogger("uvicorn.error")
-        logger.error(f"Error processing document request for model: {model_id}")
-        logger.error(f"File: {file.filename if file else 'None'}")
-        logger.error(f"Exception: {str(e)}")
-        logger.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
+        logger.error(f"Upload failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/v1/chat/completions")
-async def chat_completions(request: Dict[str, Any]) -> JSONResponse:
+@app.get("/v1/jobs/{job_id}")
+async def get_job_status(job_id: str, db = Depends(get_db)):
     """
-    OpenAI-compatible chat completions endpoint (stub for compatibility).
-    
-    This is a minimal implementation to demonstrate OpenAI API compatibility.
+    Get the status and result of a processing job.
     """
-    messages = request.get("messages", [])
-    model = request.get("model", "qwen3-vl-30b")
-    
-    # Mock response in OpenAI format
-    response = {
-        "id": "chatcmpl-mock-123",
-        "object": "chat.completion",
-        "created": 1234567890,
-        "model": model,
-        "choices": [
-            {
-                "index": 0,
-                "message": {
-                    "role": "assistant",
-                    "content": "This is a mock response. Full implementation pending."
-                },
-                "finish_reason": "stop"
-            }
-        ],
-        "usage": {
-            "prompt_tokens": 10,
-            "completion_tokens": 20,
-            "total_tokens": 30
+    service = IngestionService(db)
+    try:
+        job = await service.get_by_id(job_id, raise_not_found=False)
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found")
+            
+        response = {
+            "job_id": job.id,
+            "status": job.status.value,
+            "created_at": job.created_at.isoformat(),
+            "updated_at": job.updated_at.isoformat(),
+            "file_path": job.file_path,
+            "meta": job.meta,
+            "documents": [
+                {
+                    "id": doc.id,
+                    "filename": doc.filename,
+                    "content_text": doc.content_text[:500] + "..." if doc.content_text else None
+                } for doc in job.documents
+            ]
         }
-    }
-    
-    return JSONResponse(content=response)
-
+        
+        return JSONResponse(content=response)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching job {job_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+        
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8010)
