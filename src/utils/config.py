@@ -1,7 +1,12 @@
-import yaml
-from pathlib import Path
-from typing import Dict, Any, Optional
 import os
+from pathlib import Path
+from typing import Any, Dict, Optional
+
+import yaml
+from dotenv import load_dotenv
+
+# Load .env file so env vars are available for config expansion
+load_dotenv()
 
 
 class ConfigLoader:
