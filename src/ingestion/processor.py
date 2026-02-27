@@ -1,7 +1,7 @@
 import logging
 import asyncio
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Dict, Any
 from src.utils.config import ConfigLoader
 from src.models import ModelLoader
 from src.ingestion.converter import DocumentConverter
@@ -33,10 +33,14 @@ async def get_cached_model(model_id: str):
             raise e
 
 
-async def process_document_job(file_path: str) -> dict:
+async def process_document_job(file_path: str, model_id: str = "qwen2-vl-2b-instruct") -> dict:
     """
     Background task to process a document.
     Handles PDF conversion, Office text extraction, and multi-page processing.
+
+    Args:
+        file_path: Path to the document file.
+        model_id: Model identifier to use for processing. Defaults to qwen2-vl-2b-instruct.
     """
     try:
         path = Path(file_path)
@@ -56,7 +60,6 @@ async def process_document_job(file_path: str) -> dict:
             return {"error": "No processable content found in document."}
 
         # 2. Get Cached Model
-        model_id = "qwen2-vl-2b-instruct"
         model = await get_cached_model(model_id)
 
         # 3. Process Items (Pages/Slides/Sheets)
