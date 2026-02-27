@@ -33,8 +33,15 @@ htmlcov/
 # Local tools / editors
 # =========================
 .agent/
+.claude/
 .vscode/
 .idea/
+
+# =========================
+# Node / Frontend
+# =========================
+node_modules/
+frontend/dist/
 
 # =========================
 # Logs
