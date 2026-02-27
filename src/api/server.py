@@ -1,11 +1,12 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException, Form, Depends
+from fastapi import FastAPI, UploadFile, File, HTTPException, Form, Depends, Query
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pathlib import Path
 from typing import Optional, Dict, Any
-import tempfile
 import shutil
 import os
 import logging
+import uuid
 from contextlib import asynccontextmanager
 
 from src.utils.config import ConfigLoader
@@ -51,7 +52,16 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 @app.get("/")
+@app.get("/health")
 async def root():
     """Health check endpoint."""
     return {"status": "healthy", "service": "UniSensoryAI"}
@@ -66,11 +76,10 @@ async def process_document(
     Submit a document for asynchronous processing.
     """
     try:
-        # Save file to persistent storage
-        file_path = UPLOAD_DIR / file.filename
-        # Avoid overwriting or collision in prod, but for dev filename is ok
-        # Ideally use uuid
-        
+        # Prefix with UUID to prevent filename collisions on re-upload
+        safe_filename = f"{uuid.uuid4()}_{file.filename}"
+        file_path = UPLOAD_DIR / safe_filename
+
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
             
@@ -92,17 +101,49 @@ async def process_document(
         logger.error(f"Upload failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/v1/jobs")
+async def list_jobs(
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    db=Depends(get_db),
+):
+    """List all jobs with pagination."""
+    service = IngestionService(db)
+    try:
+        jobs = await service.list_jobs(limit=limit, offset=offset)
+        return JSONResponse(content=[
+            {
+                "job_id": job.id,
+                "status": job.status.value,
+                "created_at": job.created_at.isoformat(),
+                "updated_at": job.updated_at.isoformat(),
+                "file_path": job.file_path,
+                "meta": job.meta,
+                "documents": [
+                    {
+                        "id": doc.id,
+                        "filename": doc.filename,
+                        "content_text": doc.content_text[:500] + "..." if doc.content_text else None,
+                    }
+                    for doc in job.documents
+                ],
+            }
+            for job in jobs
+        ])
+    except Exception as e:
+        logger.error(f"Error listing jobs: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/v1/jobs/{job_id}")
-async def get_job_status(job_id: str, db = Depends(get_db)):
-    """
-    Get the status and result of a processing job.
-    """
+async def get_job_status(job_id: str, db=Depends(get_db)):
+    """Get the status and result of a processing job."""
     service = IngestionService(db)
     try:
         job = await service.get_by_id(job_id, raise_not_found=False)
         if not job:
             raise HTTPException(status_code=404, detail="Job not found")
-            
+
         response = {
             "job_id": job.id,
             "status": job.status.value,
@@ -114,19 +155,90 @@ async def get_job_status(job_id: str, db = Depends(get_db)):
                 {
                     "id": doc.id,
                     "filename": doc.filename,
-                    "content_text": doc.content_text[:500] + "..." if doc.content_text else None
-                } for doc in job.documents
-            ]
+                    "content_text": doc.content_text[:500] + "..." if doc.content_text else None,
+                }
+                for doc in job.documents
+            ],
         }
-        
+
         return JSONResponse(content=response)
-        
+
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error fetching job {job_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
-        
+
+
+@app.delete("/v1/jobs/{job_id}")
+async def delete_job(job_id: str, db=Depends(get_db)):
+    """Delete a job and its documents, clean up uploaded file."""
+    service = IngestionService(db)
+    try:
+        job = await service.get_by_id(job_id, raise_not_found=False)
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found")
+
+        # Clean up uploaded file from disk
+        try:
+            file_path = Path(job.file_path)
+            if file_path.exists():
+                file_path.unlink()
+        except OSError as file_err:
+            logger.warning(f"Could not delete file {job.file_path}: {file_err}")
+
+        # Cascade deletes documents
+        await service.delete(job_id)
+        await db.commit()
+
+        return JSONResponse(content={"detail": "Job deleted"})
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting job {job_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/v1/jobs/{job_id}/retry")
+async def retry_job(job_id: str, db=Depends(get_db)):
+    """Retry a failed job by re-enqueuing it."""
+    service = IngestionService(db)
+    try:
+        job = await service.get_by_id(job_id, raise_not_found=False)
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found")
+
+        if job.status != IngestionStatus.FAILED:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Only failed jobs can be retried. Current status: {job.status.value}",
+            )
+
+        # Reset status and clear error from meta
+        meta = dict(job.meta) if job.meta else {}
+        meta.pop("error", None)
+        await service.update_status(job_id, IngestionStatus.PENDING, meta)
+        await db.commit()
+
+        # Re-enqueue
+        queue = get_ingestion_queue()
+        await queue.queue.put(job_id)
+        logger.info(f"Retried job {job_id}")
+
+        return JSONResponse(content={
+            "job_id": job_id,
+            "status": "PENDING",
+            "message": "Job re-queued for processing.",
+        })
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error retrying job {job_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8010)

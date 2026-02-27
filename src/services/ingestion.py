@@ -1,7 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy import select
-from typing import Optional, Any
+from typing import Optional, Any, Sequence
 from .base import BaseService
 from ..db.models.ingestion import IngestionJob, IngestionStatus
 import uuid
@@ -49,3 +49,14 @@ class IngestionService(BaseService[IngestionJob]):
 
     async def mark_completed(self, job_id: str, result_summary: Optional[dict[str, Any]] = None) -> IngestionJob:
         return await self.update_status(job_id, IngestionStatus.COMPLETED, result_summary)
+
+    async def list_jobs(self, limit: int = 50, offset: int = 0) -> Sequence[IngestionJob]:
+        stmt = (
+            select(self.model)
+            .options(selectinload(self.model.documents))
+            .order_by(self.model.created_at.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        result = await self.db.execute(stmt)
+        return result.scalars().all()
