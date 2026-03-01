@@ -69,11 +69,12 @@ class TestExpandEnvVars:
             assert result["other_field"] == "keep"
             assert "api_key_env" not in result
 
-    def test_expand_env_vars_missing_raises(self):
-        """Missing env var should raise ValueError."""
+    def test_expand_env_vars_missing_skips(self):
+        """Missing env var should be silently skipped."""
         config = {"api_key_env": "NONEXISTENT_VAR_XYZ_123"}
-        with pytest.raises(ValueError, match="Environment variable"):
-            ConfigLoader._expand_env_vars(config)
+        result = ConfigLoader._expand_env_vars(config)
+        assert "api_key" not in result
+        assert "api_key_env" not in result
 
     def test_expand_env_vars_nested(self):
         """Nested dicts should be recursively expanded."""
