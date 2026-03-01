@@ -155,7 +155,7 @@ async def get_job_status(job_id: str, db=Depends(get_db)):
                 {
                     "id": doc.id,
                     "filename": doc.filename,
-                    "content_text": doc.content_text[:500] + "..." if doc.content_text else None,
+                    "content_text": doc.content_text,
                 }
                 for doc in job.documents
             ],
