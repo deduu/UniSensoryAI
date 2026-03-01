@@ -38,11 +38,12 @@ export function useJobList() {
         const existingIds = new Set(jobs.map((j) => j.job_id))
 
         // Map backend jobs to frontend shape and merge
+        // Status is already normalized to lowercase by the API layer (jobs.js)
         const mapped = backendJobs.map((bj) => ({
           job_id: bj.job_id,
-          status: bj.status?.toLowerCase(),
+          status: bj.status,
           filename: extractFilename(bj.file_path) || bj.job_id,
-          model_id: bj.meta?.model_id || '—',
+          model_id: bj.model_id || '—',
           created_at: bj.created_at,
           updated_at: bj.updated_at,
           documents: bj.documents || [],
@@ -91,7 +92,7 @@ export function useJobList() {
       if (result.status === 'fulfilled') {
         const data = result.value
         updateJob(pending[i].job_id, {
-          status: data.status?.toLowerCase(),
+          status: data.status,
           documents: data.documents || [],
           updated_at: data.updated_at,
         })

@@ -89,21 +89,26 @@ function JobsTab() {
   const { removeJob } = useJobs()
   const { jobs } = useJobList()
   const [selectedJob, setSelectedJob] = useState(null)
+  const [deleteError, setDeleteError] = useState(null)
 
   async function handleDeleteJob(job) {
+    setDeleteError(null)
     try {
       await deleteJob(job.job_id, backendUrl)
       removeJob(job.job_id)
       if (selectedJob?.job_id === job.job_id) {
         setSelectedJob(null)
       }
-    } catch {
-      // silently fail
+    } catch (err) {
+      setDeleteError(err.message || 'Failed to delete job')
     }
   }
 
   return (
     <div className="relative">
+      {deleteError && (
+        <p className="mb-3 rounded bg-red-50 px-3 py-2 text-sm text-red-700">{deleteError}</p>
+      )}
       <JobTable
         jobs={jobs}
         onSelectJob={setSelectedJob}

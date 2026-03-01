@@ -12,22 +12,24 @@ export default function JobDetailPanel({ job, onClose }) {
   const { updateJob, removeJob } = useJobs()
   const [deleting, setDeleting] = useState(false)
   const [retrying, setRetrying] = useState(false)
+  const [actionError, setActionError] = useState(null)
 
-  // Poll while viewing a non-terminal job
-  const isTerminal = ['completed', 'failed', 'COMPLETED', 'FAILED'].includes(job?.status)
+  // Poll while viewing a non-terminal job (status is always lowercase from API layer)
+  const isTerminal = ['completed', 'failed'].includes(job?.status)
   useJobPolling(isTerminal ? null : job?.job_id)
 
   if (!job) return null
 
-  const isFailed = ['failed', 'FAILED'].includes(job.status)
+  const isFailed = job.status === 'failed'
 
   async function handleRetry() {
     setRetrying(true)
+    setActionError(null)
     try {
       await retryJob(job.job_id, backendUrl)
-      updateJob(job.job_id, { status: 'PENDING', documents: [] })
-    } catch {
-      // silently fail — user sees the status hasn't changed
+      updateJob(job.job_id, { status: 'pending', documents: [] })
+    } catch (err) {
+      setActionError(err.message || 'Retry failed')
     } finally {
       setRetrying(false)
     }
@@ -35,11 +37,13 @@ export default function JobDetailPanel({ job, onClose }) {
 
   async function handleDelete() {
     setDeleting(true)
+    setActionError(null)
     try {
       await deleteJob(job.job_id, backendUrl)
       removeJob(job.job_id)
       onClose()
-    } catch {
+    } catch (err) {
+      setActionError(err.message || 'Delete failed')
       setDeleting(false)
     }
   }
@@ -93,6 +97,11 @@ export default function JobDetailPanel({ job, onClose }) {
               <label className="text-xs font-semibold uppercase text-red-500">Error</label>
               <p className="mt-1 rounded bg-red-50 p-2 text-sm text-red-700">{job.meta.error}</p>
             </div>
+          )}
+
+          {/* Action error */}
+          {actionError && (
+            <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-700">{actionError}</p>
           )}
 
           {/* Action buttons */}

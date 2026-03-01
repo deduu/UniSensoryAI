@@ -1,6 +1,19 @@
 import { apiFetch } from './client'
 
 /**
+ * Normalize a backend job object to a consistent frontend shape.
+ * - Lowercases status (backend returns uppercase enum values)
+ * - Hoists model_id from meta to root level
+ */
+function normalizeJob(job) {
+  return {
+    ...job,
+    status: job.status?.toLowerCase(),
+    model_id: job.model_id || job.meta?.model_id || null,
+  }
+}
+
+/**
  * Upload a document for processing.
  * @param {File} file
  * @param {string} modelId
@@ -26,7 +39,8 @@ export async function uploadDocument(file, modelId = 'qwen3-vl-30b', baseUrl = '
  * @param {string} baseUrl
  */
 export async function getJob(jobId, baseUrl = '') {
-  return apiFetch(`/v1/jobs/${jobId}`, { baseUrl })
+  const data = await apiFetch(`/v1/jobs/${jobId}`, { baseUrl })
+  return normalizeJob(data)
 }
 
 /**
@@ -36,7 +50,8 @@ export async function getJob(jobId, baseUrl = '') {
  * @param {number} offset
  */
 export async function listJobs(baseUrl = '', limit = 50, offset = 0) {
-  return apiFetch(`/v1/jobs?limit=${limit}&offset=${offset}`, { baseUrl })
+  const data = await apiFetch(`/v1/jobs?limit=${limit}&offset=${offset}`, { baseUrl })
+  return Array.isArray(data) ? data.map(normalizeJob) : data
 }
 
 /**

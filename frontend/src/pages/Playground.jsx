@@ -12,6 +12,7 @@ export default function Playground() {
   const { addJob, getJob } = useJobs()
   const [loading, setLoading] = useState(false)
   const [activeJobId, setActiveJobId] = useState(null)
+  const [error, setError] = useState(null)
 
   // Poll active job
   const activeJob = getJob(activeJobId)
@@ -25,6 +26,7 @@ export default function Playground() {
   const handleRun = useCallback(
     async (file, modelId) => {
       setLoading(true)
+      setError(null)
       try {
         const result = await uploadDocument(file, modelId, backendUrl)
         setActiveJobId(result.job_id)
@@ -38,8 +40,7 @@ export default function Playground() {
           documents: [],
         })
       } catch (err) {
-        // TODO: show toast
-        console.error('Playground run failed:', err)
+        setError(err.message || 'Processing failed')
       } finally {
         setLoading(false)
       }
@@ -53,6 +54,10 @@ export default function Playground() {
       <p className="mt-1 text-sm text-ink-muted">
         Test document processing with different models interactively
       </p>
+
+      {error && (
+        <p className="mt-4 rounded bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
+      )}
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-5">
         <Card className="p-5 lg:col-span-2">

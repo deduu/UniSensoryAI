@@ -21,16 +21,16 @@ export function useJobPolling(jobId, interval = 2000) {
         const data = await getJob(jobId, backendUrl)
         if (!active) return
 
-        const status = data.status?.toLowerCase()
+        // Status is already normalized to lowercase by the API layer (jobs.js)
         updateJob(jobId, {
-          status,
+          status: data.status,
           documents: data.documents || [],
           updated_at: data.updated_at,
           meta: data.meta,
         })
 
         const terminal = ['completed', 'failed']
-        if (terminal.includes(status)) {
+        if (terminal.includes(data.status)) {
           return // stop polling
         }
       } catch {
