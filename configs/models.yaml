@@ -73,7 +73,7 @@ models:
     model_type: vision-language
     config:
       api_key_env: "OPENAI_API_KEY"  # Will be resolved to actual env var
-      base_url_env: "OPENAI_BASE_URL"  # Optional
+      base_url_env: "OPENAI_API_BASE"  # Optional
       max_tokens: 4096
       temperature: 0.7
 

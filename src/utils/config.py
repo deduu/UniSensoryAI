@@ -115,11 +115,9 @@ class ConfigLoader:
                 # Replace _env key with actual key and resolve env var
                 actual_key = key[:-4]  # Remove '_env' suffix
                 env_value = os.getenv(value)
-                if env_value is None:
-                    raise ValueError(
-                        f"Environment variable '{value}' not found for config key '{key}'"
-                    )
-                result[actual_key] = env_value
+                if env_value is not None:
+                    result[actual_key] = env_value
+                # Skip silently if not set — downstream code validates required fields
             else:
                 result[key] = value
         
