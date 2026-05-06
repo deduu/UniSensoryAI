@@ -3,16 +3,20 @@ pipelines:
     description: "Basic document processing pipeline"
     stages:
       - ingestion
-      - parsing
+      - conversion
+      - inference
       - formatting
-  
+    stage_timeout_s: 60
+
   advanced:
     description: "Advanced pipeline with validation and routing"
     stages:
       - ingestion
       - validation
       - routing
-      - parsing
+      - conversion
+      - inference
       - content_validation
       - enrichment
       - formatting
+    stage_timeout_s: 90

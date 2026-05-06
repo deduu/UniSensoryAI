@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
+import { CheckCircle2 } from 'lucide-react'
 import Tabs from '../components/ui/Tabs'
 import Card from '../components/ui/Card'
 import Button from '../components/ui/Button'
 import { useApp } from '../context/AppContext'
 import { checkHealth } from '../api/health'
 import { AVAILABLE_MODELS } from '../api/models'
+import { useSettings } from '../context/SettingsContext'
 
 function ConnectionTab() {
   const { backendUrl, setBackendUrl } = useApp()
@@ -37,7 +39,7 @@ function ConnectionTab() {
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           placeholder="http://localhost:8010 (leave empty for proxy)"
-          className="flex-1 rounded-lg border border-surface-border bg-white px-3 py-2.5 text-sm text-ink placeholder:text-ink-faint focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+          className="flex-1 rounded-lg border border-surface-border bg-surface-muted px-3 py-2.5 text-sm text-ink placeholder:text-ink-faint focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
         />
         <Button variant="secondary" onClick={handleTest} loading={testing}>
           Test
@@ -107,6 +109,92 @@ function AboutTab() {
   )
 }
 
+function ApiKeysTab() {
+  const { apiKeys, updateApiKey } = useSettings()
+  const [openaiKey, setOpenaiKey] = useState(apiKeys.OPENAI_API_KEY || '')
+  const [openaiBase, setOpenaiBase] = useState(apiKeys.OPENAI_API_BASE || '')
+  const [googleKey, setGoogleKey] = useState(apiKeys.GOOGLE_API_KEY || '')
+  const [saved, setSaved] = useState(false)
+
+  const handleSave = () => {
+    updateApiKey('OPENAI_API_KEY', openaiKey)
+    updateApiKey('OPENAI_API_BASE', openaiBase)
+    updateApiKey('GOOGLE_API_KEY', googleKey)
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2000)
+  }
+
+  const ConfiguredBadge = () => (
+    <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full ml-2">
+      <CheckCircle2 className="w-3 h-3" /> Configured
+    </span>
+  )
+
+  return (
+    <Card className="max-w-xl p-6">
+      <h3 className="text-sm font-semibold text-ink">Cloud API Keys</h3>
+      <p className="mt-1 text-xs text-ink-muted">
+        Set your API keys to use cloud models. These keys are stored securely in your browser's local storage and sent directly to your backend.
+      </p>
+
+      <div className="mt-6 space-y-5">
+        <div className="p-4 rounded-xl border border-surface-border bg-surface-muted/30 space-y-4">
+          <div className="flex items-center justify-between">
+            <h4 className="text-sm font-semibold text-ink">OpenAI (GPT-4o)</h4>
+            {apiKeys.OPENAI_API_KEY && <ConfiguredBadge />}
+          </div>
+          
+          <div>
+            <label className="block text-xs font-medium text-ink-muted mb-1.5">API Key</label>
+            <input
+              type="password"
+              value={openaiKey}
+              onChange={(e) => setOpenaiKey(e.target.value)}
+              placeholder={apiKeys.OPENAI_API_KEY ? '••••••••••••••••' : 'sk-...'}
+              className="w-full rounded-lg border border-surface-border bg-surface-muted px-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+            />
+          </div>
+          
+          <div>
+            <label className="block text-xs font-medium text-ink-muted mb-1.5">Base URL (Optional, for Azure/Third-party)</label>
+            <input
+              type="text"
+              value={openaiBase}
+              onChange={(e) => setOpenaiBase(e.target.value)}
+              placeholder="https://your-resource.openai.azure.com/openai/v1/"
+              className="w-full rounded-lg border border-surface-border bg-surface-muted px-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+            />
+          </div>
+        </div>
+        
+        <div className="p-4 rounded-xl border border-surface-border bg-surface-muted/30 space-y-4">
+          <div className="flex items-center justify-between">
+            <h4 className="text-sm font-semibold text-ink">Google (Gemini)</h4>
+            {apiKeys.GOOGLE_API_KEY && <ConfiguredBadge />}
+          </div>
+          
+          <div>
+            <label className="block text-xs font-medium text-ink-muted mb-1.5">API Key</label>
+            <input
+              type="password"
+              value={googleKey}
+              onChange={(e) => setGoogleKey(e.target.value)}
+              placeholder={apiKeys.GOOGLE_API_KEY ? '••••••••••••••••' : 'AIzaSy...'}
+              className="w-full rounded-lg border border-surface-border bg-surface-muted px-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+            />
+          </div>
+        </div>
+
+        <div className="pt-2 flex justify-end">
+          <Button onClick={handleSave}>
+            {saved ? 'Saved!' : 'Save Keys'}
+          </Button>
+        </div>
+      </div>
+    </Card>
+  )
+}
+
 export default function Settings() {
   useEffect(() => {
     document.title = 'Settings — UniSensoryAI'
@@ -121,6 +209,7 @@ export default function Settings() {
         className="mt-6"
         tabs={[
           { key: 'connection', label: 'Connection', content: <ConnectionTab /> },
+          { key: 'api_keys', label: 'API Keys', content: <ApiKeysTab /> },
           { key: 'about', label: 'About', content: <AboutTab /> },
         ]}
       />

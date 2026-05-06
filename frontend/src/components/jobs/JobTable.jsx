@@ -16,7 +16,7 @@ export default function JobTable({ jobs, onSelectJob, onDeleteJob, emptyAction }
   }
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-surface-border bg-white">
+    <div className="overflow-x-auto rounded-xl border border-surface-border bg-surface-muted">
       <table className="w-full">
         <thead>
           <tr className="border-b border-surface-border bg-surface-subtle text-left">

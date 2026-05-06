@@ -1,4 +1,10 @@
-"""Tests for src/ingestion/processor.py — model_id threading and processing logic."""
+"""Tests for src/ingestion/processor.py — model_id threading and processing logic.
+
+Since processor.py now delegates to PipelineExecutor, these tests patch at
+the stage-level dependencies (DocumentConverter in conversion_stage,
+get_cached_model in processor module) to verify end-to-end behavior through
+the pipeline.
+"""
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -16,7 +22,7 @@ async def test_process_document_job_uses_provided_model_id(tmp_path):
 
     with (
         patch(
-            "src.ingestion.processor.DocumentConverter.convert",
+            "src.pipeline.stages.conversion_stage.DocumentConverter.convert",
             return_value=["text content"],
         ),
         patch(
@@ -28,7 +34,7 @@ async def test_process_document_job_uses_provided_model_id(tmp_path):
         from src.ingestion.processor import process_document_job
 
         await process_document_job(str(img_path), model_id="gpt-4o")
-        mock_get_model.assert_called_once_with("gpt-4o")
+        mock_get_model.assert_called_once_with("gpt-4o", None)
 
 
 @pytest.mark.asyncio
@@ -42,7 +48,7 @@ async def test_process_document_job_defaults_model_id(tmp_path):
 
     with (
         patch(
-            "src.ingestion.processor.DocumentConverter.convert",
+            "src.pipeline.stages.conversion_stage.DocumentConverter.convert",
             return_value=["text content"],
         ),
         patch(
@@ -54,7 +60,7 @@ async def test_process_document_job_defaults_model_id(tmp_path):
         from src.ingestion.processor import process_document_job
 
         await process_document_job(str(img_path))
-        mock_get_model.assert_called_once_with("qwen2-vl-2b-instruct")
+        mock_get_model.assert_called_once_with("qwen2-vl-2b-instruct", None)
 
 
 @pytest.mark.asyncio
@@ -68,7 +74,7 @@ async def test_process_document_job_text_processing(tmp_path):
 
     with (
         patch(
-            "src.ingestion.processor.DocumentConverter.convert",
+            "src.pipeline.stages.conversion_stage.DocumentConverter.convert",
             return_value=["Sheet content here"],
         ),
         patch(
@@ -102,7 +108,7 @@ async def test_process_document_job_image_processing(tmp_path):
 
     with (
         patch(
-            "src.ingestion.processor.DocumentConverter.convert",
+            "src.pipeline.stages.conversion_stage.DocumentConverter.convert",
             return_value=[pil_image],
         ),
         patch(
@@ -137,7 +143,7 @@ async def test_process_document_job_conversion_failure(tmp_path):
     fake_path.touch()
 
     with patch(
-        "src.ingestion.processor.DocumentConverter.convert",
+        "src.pipeline.stages.conversion_stage.DocumentConverter.convert",
         side_effect=RuntimeError("conversion error"),
     ):
         from src.ingestion.processor import process_document_job

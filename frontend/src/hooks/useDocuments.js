@@ -20,6 +20,8 @@ export function useDocuments() {
           job_id: job.job_id,
           model_id: job.model_id,
           job_status: job.status,
+          created_at: job.created_at,
+          file_size: job.meta?.file_size,
         })
       }
     }

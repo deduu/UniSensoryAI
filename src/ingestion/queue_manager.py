@@ -1,4 +1,5 @@
 import asyncio
+import re
 import time
 import logging
 from pathlib import Path
@@ -11,6 +12,15 @@ from ..services.document import DocumentService
 from ..db.models.ingestion import IngestionStatus
 
 logger = logging.getLogger(__name__)
+
+_UUID_PREFIX = re.compile(
+    r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_',
+    re.IGNORECASE,
+)
+
+def _strip_uuid_prefix(filename: str) -> str:
+    """Remove a leading UUID prefix (e.g. ``<uuid>_original.pdf``) from a filename."""
+    return _UUID_PREFIX.sub('', filename)
 
 
 class RateLimiter:
@@ -109,6 +119,9 @@ class IngestionQueue:
                     await session.commit()
                     file_path = job.file_path
                     model_id = (job.meta or {}).get("model_id", "qwen2-vl-2b-instruct")
+                    api_keys = (job.meta or {}).get("api_keys", None)
+                    start_page = (job.meta or {}).get("start_page", None)
+                    end_page = (job.meta or {}).get("end_page", None)
 
                 try:
                     # Apply rate limit before processing (assuming processing makes outbound calls)
@@ -117,7 +130,17 @@ class IngestionQueue:
                     # Process
                     # NOTE: This is where we call the actual document agent/pipeline
                     logger.info(f"Processing job {job_id}: {file_path} with model {model_id}")
-                    result = await self.processing_function(file_path, model_id)
+                    
+                    import inspect
+                    sig = inspect.signature(self.processing_function)
+                    kwargs = {}
+                    if "api_keys" in sig.parameters:
+                        kwargs["api_keys"] = api_keys
+                    if "start_page" in sig.parameters:
+                        kwargs["start_page"] = start_page
+                    if "end_page" in sig.parameters:
+                        kwargs["end_page"] = end_page
+                    result = await self.processing_function(file_path, model_id, **kwargs)
 
                     async with db_session.session_manager.session() as session:
                         # 1. Update IngestionJob status
@@ -128,8 +151,13 @@ class IngestionQueue:
 
                         # 2. Create Document record
                         doc_service = DocumentService(session)
+                        # Use original_filename from meta (set at upload time).
+                        # Fall back to stripping the UUID prefix from the stored path name
+                        # for jobs submitted before this change.
+                        raw_name = Path(file_path).name
+                        display_name = (job.meta or {}).get("original_filename") or _strip_uuid_prefix(raw_name)
                         await doc_service.create_document(
-                            job_id=job_id, filename=Path(file_path).name, content=result
+                            job_id=job_id, filename=display_name, content=result
                         )
 
                         await session.commit()
@@ -160,7 +188,52 @@ def get_ingestion_queue() -> IngestionQueue:
     return _ingestion_queue
 
 
-def init_ingestion_queue(processing_func: Callable[[str, str], Awaitable[Any]]) -> IngestionQueue:
+def init_ingestion_queue(
+    processing_func: Callable[[str, str], Awaitable[Any]],
+    backend: Optional[str] = None,
+    **kwargs,
+) -> IngestionQueue:
+    """Factory function to create the appropriate queue backend.
+
+    Args:
+        processing_func: The document processing function.
+        backend: Queue backend — "redis" or "memory". Defaults to
+            QUEUE_BACKEND env var, falling back to "memory".
+        **kwargs: Additional kwargs passed to the queue constructor
+            (e.g. redis_url, concurrency, gpu_semaphore_limit).
+
+    Returns:
+        An IngestionQueue (memory) or RedisIngestionQueue instance.
+    """
+    import os
+    if backend is None:
+        backend = os.getenv("QUEUE_BACKEND", "memory")
+
     global _ingestion_queue
-    _ingestion_queue = IngestionQueue(processing_func)
+
+    if backend == "redis":
+        from src.ingestion.redis_queue import RedisIngestionQueue
+
+        redis_url = kwargs.pop("redis_url", os.getenv("REDIS_URL", "redis://localhost:6379"))
+        concurrency = kwargs.pop("concurrency", int(os.getenv("WORKER_CONCURRENCY", "4")))
+        gpu_limit = kwargs.pop("gpu_semaphore_limit", int(os.getenv("GPU_SEMAPHORE_LIMIT", "1")))
+
+        _ingestion_queue = RedisIngestionQueue(
+            processing_function=processing_func,
+            redis_url=redis_url,
+            concurrency=concurrency,
+            gpu_semaphore_limit=gpu_limit,
+            **kwargs,
+        )
+        logger.info(
+            "Initialized Redis queue (url=%s, concurrency=%d, gpu_limit=%d)",
+            redis_url,
+            concurrency,
+            gpu_limit,
+        )
+    else:
+        _ingestion_queue = IngestionQueue(processing_func)
+        logger.info("Initialized in-memory queue")
+
     return _ingestion_queue
+

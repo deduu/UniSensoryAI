@@ -1,79 +1,110 @@
 import { useEffect, useState } from 'react'
-import { MessageSquare, Send, Plus } from 'lucide-react'
-import Card from '../components/ui/Card'
-import Button from '../components/ui/Button'
+import { AlertCircle, X } from 'lucide-react'
+import { useChat } from '../hooks/useChat'
+import { useSettings } from '../context/SettingsContext'
+import ChatSidebar from '../components/chat/ChatSidebar'
+import ChatToolbar from '../components/chat/ChatToolbar'
+import ChatMessages from '../components/chat/ChatMessages'
+import ChatInput from '../components/chat/ChatInput'
+import DocumentGroundingPanel from '../components/chat/DocumentGroundingPanel'
 
 export default function Chat() {
+  const { apiKeys } = useSettings()
   const [message, setMessage] = useState('')
-  const [toast, setToast] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [docPanelCollapsed, setDocPanelCollapsed] = useState(false)
+
+  const {
+    conversations, activeConversationId, messages, isStreaming,
+    streamingContent, streamingThinking, error,
+    modelId, setModelId, thinkingEnabled, setThinkingEnabled,
+    streamingEnabled, setStreamingEnabled, temperature, setTemperature,
+    selectedDocIds, setSelectedDocIds,
+    loadConversations, loadConversation, createNewConversation,
+    removeConversation, sendMessage, stopStreaming,
+  } = useChat()
 
   useEffect(() => {
     document.title = 'Chat — UniSensoryAI'
-  }, [])
+    loadConversations()
+  }, [loadConversations])
 
   const handleSend = () => {
     if (!message.trim()) return
-    setToast(true)
+    sendMessage(message)
     setMessage('')
-    setTimeout(() => setToast(false), 3000)
+  }
+
+  const handleSuggestedPrompt = (text) => {
+    setMessage(text)
   }
 
   return (
-    <div className="flex h-[calc(100vh-12rem)] gap-6">
-      {/* Conversation sidebar */}
-      <Card className="w-72 shrink-0 flex flex-col">
-        <div className="border-b border-surface-border p-4">
-          <Button variant="secondary" className="w-full">
-            <Plus className="h-4 w-4" />
-            New Chat
-          </Button>
-        </div>
-        <div className="flex-1 overflow-y-auto p-3">
-          <div className="rounded-lg bg-surface-subtle p-3">
-            <p className="text-sm font-medium text-ink">New conversation</p>
-            <p className="mt-0.5 text-xs text-ink-muted">Just now</p>
-          </div>
-        </div>
-      </Card>
+    <div className="flex h-[calc(100vh-4rem)] overflow-hidden">
+      {/* Left — Conversation Sidebar */}
+      <ChatSidebar
+        conversations={conversations}
+        activeId={activeConversationId}
+        onSelect={loadConversation}
+        onNew={createNewConversation}
+        onDelete={removeConversation}
+        collapsed={sidebarCollapsed}
+        onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
+      />
 
-      {/* Chat area */}
-      <Card className="flex flex-1 flex-col">
-        {/* Messages */}
-        <div className="flex flex-1 flex-col items-center justify-center p-8">
-          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-brand-light">
-            <MessageSquare className="h-8 w-8 text-brand" />
-          </div>
-          <h2 className="mt-4 text-lg font-semibold text-ink">Chat with your documents</h2>
-          <p className="mt-1 max-w-sm text-center text-sm text-ink-muted">
-            Ask questions about your processed documents using natural language.
-            This feature is coming soon.
-          </p>
-        </div>
+      {/* Center — Chat Area */}
+      <div className="flex flex-1 flex-col min-w-0">
+        {/* Toolbar */}
+        <ChatToolbar
+          modelId={modelId}
+          setModelId={setModelId}
+          thinkingEnabled={thinkingEnabled}
+          setThinkingEnabled={setThinkingEnabled}
+          streamingEnabled={streamingEnabled}
+          setStreamingEnabled={setStreamingEnabled}
+          temperature={temperature}
+          setTemperature={setTemperature}
+          apiKeys={apiKeys}
+        />
 
-        {/* Input */}
-        <div className="border-t border-surface-border p-4">
-          <div className="flex gap-3">
-            <input
-              type="text"
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-              placeholder="Ask about your documents..."
-              className="flex-1 rounded-lg border border-surface-border bg-white px-4 py-2.5 text-sm text-ink placeholder:text-ink-faint focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
-            />
-            <Button onClick={handleSend}>
-              <Send className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-
-        {/* Toast */}
-        {toast && (
-          <div className="absolute bottom-20 left-1/2 -translate-x-1/2 animate-fade-in rounded-lg bg-ink px-4 py-2 text-sm text-white shadow-lg">
-            Coming soon — chat backend not yet available
+        {/* Error Banner */}
+        {error && (
+          <div className="flex items-center gap-2 mx-4 mt-2 px-4 py-2.5 rounded-xl border border-red-500/20 bg-red-500/10 animate-fade-in">
+            <AlertCircle className="h-4 w-4 text-red-400 shrink-0" />
+            <p className="text-xs text-red-400 flex-1">{error}</p>
+            <button onClick={() => {}} className="p-1 rounded-lg text-red-400/50 hover:text-red-400 transition-colors">
+              <X className="h-3.5 w-3.5" />
+            </button>
           </div>
         )}
-      </Card>
+
+        {/* Messages */}
+        <ChatMessages
+          messages={messages}
+          streamingContent={streamingContent}
+          streamingThinking={streamingThinking}
+          isStreaming={isStreaming}
+          onSuggestedPrompt={handleSuggestedPrompt}
+        />
+
+        {/* Input */}
+        <ChatInput
+          message={message}
+          setMessage={setMessage}
+          onSend={handleSend}
+          onStop={stopStreaming}
+          isStreaming={isStreaming}
+          selectedDocCount={selectedDocIds.length}
+        />
+      </div>
+
+      {/* Right — Document Grounding Panel */}
+      <DocumentGroundingPanel
+        selectedIds={selectedDocIds}
+        setSelectedIds={setSelectedDocIds}
+        collapsed={docPanelCollapsed}
+        onToggle={() => setDocPanelCollapsed(!docPanelCollapsed)}
+      />
     </div>
   )
 }

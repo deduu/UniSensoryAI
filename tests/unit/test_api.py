@@ -56,6 +56,8 @@ def mock_lifespan():
 def test_app(mock_lifespan):
     """Create a test FastAPI app with mocked lifespan and DB dependency override."""
     from src.api.server import app
+    from src.api.auth import get_current_user
+    from src.api.rate_limit import RateLimitDep
 
     app.router.lifespan_context = mock_lifespan
 
@@ -64,7 +66,11 @@ def test_app(mock_lifespan):
     async def override_get_db():
         return mock_session
 
+    async def override_auth():
+        return {"sub": "test-user"}
+
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = override_auth
 
     yield app
 

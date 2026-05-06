@@ -94,7 +94,7 @@ class ConfigLoader:
             )
     
     @staticmethod
-    def _expand_env_vars(config: Dict[str, Any]) -> Dict[str, Any]:
+    def _expand_env_vars(config: Dict[str, Any], overrides: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
         """Recursively expand environment variables in config values.
         
         Looks for values ending with '_env' and replaces them with actual env var values.
@@ -102,19 +102,21 @@ class ConfigLoader:
         
         Args:
             config: Configuration dictionary.
+            overrides: Optional dictionary of environment variable overrides.
             
         Returns:
             Configuration with environment variables expanded.
         """
         result = {}
+        overrides = overrides or {}
         
         for key, value in config.items():
             if isinstance(value, dict):
-                result[key] = ConfigLoader._expand_env_vars(value)
+                result[key] = ConfigLoader._expand_env_vars(value, overrides)
             elif isinstance(key, str) and isinstance(value, str) and key.endswith("_env"):
                 # Replace _env key with actual key and resolve env var
                 actual_key = key[:-4]  # Remove '_env' suffix
-                env_value = os.getenv(value)
+                env_value = overrides.get(value) or os.getenv(value)
                 if env_value is not None:
                     result[actual_key] = env_value
                 # Skip silently if not set — downstream code validates required fields
@@ -127,7 +129,8 @@ class ConfigLoader:
     def get_model_config(
         model_id: str, 
         config_dir: Optional[Path] = None,
-        validate: bool = True
+        validate: bool = True,
+        api_keys: Optional[Dict[str, str]] = None
     ) -> Dict[str, Any]:
         """Load configuration for a specific model.
         
@@ -135,6 +138,7 @@ class ConfigLoader:
             model_id: Identifier of the model (e.g., 'qwen2-vl-2b-instruct').
             config_dir: Directory containing models.yaml. Defaults to 'configs/'.
             validate: Whether to validate the configuration.
+            api_keys: Optional overrides for environment variables (API keys).
             
         Returns:
             Model configuration dictionary ready for ModelLoader.
@@ -165,7 +169,7 @@ class ConfigLoader:
         # Expand environment variables
         if "config" in model_config:
             model_config["config"] = ConfigLoader._expand_env_vars(
-                model_config["config"]
+                model_config["config"], overrides=api_keys
             )
         
         return model_config

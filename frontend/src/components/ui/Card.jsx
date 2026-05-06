@@ -1,8 +1,8 @@
 export default function Card({ children, className = '', hover = false, ...props }) {
   return (
     <div
-      className={`rounded-xl border border-surface-border bg-white shadow-card ${
-        hover ? 'transition-shadow hover:shadow-card-hover' : ''
+      className={`glass-panel ${
+        hover ? 'glass-panel-hover cursor-pointer' : ''
       } ${className}`}
       {...props}
     >

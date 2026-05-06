@@ -16,6 +16,7 @@ from alembic import context
 from src.db.base import Base
 # Import models to ensure they are registered with Base.metadata
 from src.db.models import ingestion
+from src.db.models import chat
 
 # get config
 config = context.config

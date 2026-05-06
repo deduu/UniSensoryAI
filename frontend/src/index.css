@@ -9,33 +9,134 @@
     font-family: 'Inter', system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    background-color: #09090b; /* Deep dark bg */
+    color: #ffffff;
   }
 
-  /* Custom scrollbar */
+  /* Custom Polished Scrollbar */
   ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: 8px;
+    height: 8px;
   }
   ::-webkit-scrollbar-track {
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
-    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    border: 2px solid #09090b;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: #94a3b8;
+    background: rgba(255, 255, 255, 0.2);
   }
 }
 
 @layer components {
+  /* Dynamic Glass Panels */
+  .glass-panel {
+    @apply bg-surface-glass backdrop-blur-md border border-surface-border shadow-card transition-all duration-300;
+  }
+  
+  .glass-panel-hover {
+    @apply hover:bg-surface-muted hover:-translate-y-1 hover:shadow-card-hover hover:border-brand/30;
+  }
+
+  /* Vibrant Buttons */
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-brand-hover focus:outline-none focus:ring-2 focus:ring-brand/50 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-brand px-5 py-2.5 text-sm font-medium text-white transition-all duration-300 shadow-[0_0_10px_rgba(99,102,241,0.2)] hover:bg-brand-hover hover:shadow-glow hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-brand/50 focus:ring-offset-2 focus:ring-offset-surface disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none;
   }
+  
   .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-surface-border bg-white px-4 py-2.5 text-sm font-medium text-ink transition-colors hover:bg-surface-subtle focus:outline-none focus:ring-2 focus:ring-brand/50 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-surface-border bg-surface-muted px-5 py-2.5 text-sm font-medium text-ink transition-all duration-300 hover:bg-surface-subtle hover:border-brand/30 hover:text-brand-hover focus:outline-none focus:ring-2 focus:ring-brand/50 focus:ring-offset-2 focus:ring-offset-surface disabled:opacity-50 disabled:cursor-not-allowed;
   }
+  
   .btn-ghost {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium text-ink-muted transition-colors hover:bg-surface-subtle focus:outline-none focus:ring-2 focus:ring-brand/50 disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-medium text-ink-muted transition-all duration-300 hover:bg-surface-subtle hover:text-ink focus:outline-none focus:ring-2 focus:ring-brand/50 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  /* Typography Utilities */
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-brand to-cyan-400;
   }
 }
+
+/* Background utilities */
+.mesh-bg {
+  background-color: #09090b;
+  background-image: radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
+                    radial-gradient(at 100% 0%, rgba(34, 211, 238, 0.1) 0px, transparent 50%),
+                    radial-gradient(at 100% 100%, rgba(99, 102, 241, 0.1) 0px, transparent 50%);
+  background-attachment: fixed;
+}
+
+/* Resize Handle — Inspector Pane */
+.resize-handle {
+  position: absolute;
+  z-index: 20;
+  transition: background-color 0.15s ease;
+}
+.resize-handle:hover,
+.resize-handle.is-dragging {
+  background-color: rgba(99, 102, 241, 0.5);
+}
+.resize-handle-h {
+  width: 4px;
+  top: 0;
+  bottom: 0;
+  left: -2px;
+  cursor: col-resize;
+}
+.resize-handle-v {
+  height: 4px;
+  left: 0;
+  right: 0;
+  top: -2px;
+  cursor: row-resize;
+}
+
+/* Document Table */
+.doc-table-row {
+  @apply transition-colors duration-150;
+}
+.doc-table-row:hover {
+  @apply bg-surface-subtle;
+}
+.doc-table-row.is-active {
+  @apply bg-brand/5 border-l-2 border-l-brand;
+}
+.doc-table-row.is-selected {
+  @apply bg-brand/10;
+}
+
+/* Inspector Pane */
+.inspector-pane {
+  @apply border-surface-border bg-surface;
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.3);
+}
+.inspector-pane-bottom {
+  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.3);
+}
+
+/* View Toggle Button Group */
+.view-toggle-btn {
+  @apply inline-flex items-center justify-center p-1.5 rounded-md text-ink-faint transition-colors;
+}
+.view-toggle-btn:hover {
+  @apply text-ink-muted bg-surface-subtle;
+}
+.view-toggle-btn.is-active {
+  @apply text-brand bg-brand/10;
+}
+
+/* User-select prevention during drag */
+.is-resizing * {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  cursor: col-resize !important;
+}
+.is-resizing-v * {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  cursor: row-resize !important;
+}
+

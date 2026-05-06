@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react'
 import { uploadDocument } from '../api/jobs'
 import { useApp } from '../context/AppContext'
 import { useJobs } from '../context/JobContext'
+import { useSettings } from '../context/SettingsContext'
 
 const STATES = {
   IDLE: 'IDLE',
@@ -15,6 +16,7 @@ const STATES = {
 export function useFileUpload() {
   const { backendUrl } = useApp()
   const { addJob } = useJobs()
+  const { apiKeys } = useSettings()
   const [files, setFiles] = useState([])
   const [state, setState] = useState(STATES.IDLE)
   const [error, setError] = useState(null)
@@ -35,7 +37,7 @@ export function useFileUpload() {
   }, [])
 
   const upload = useCallback(
-    async (modelId = 'qwen3-vl-30b') => {
+    async (modelId = 'qwen3-vl-30b', startPage = null, endPage = null) => {
       if (files.length === 0) return
       setState(STATES.UPLOADING)
       setError(null)
@@ -43,7 +45,7 @@ export function useFileUpload() {
       try {
         // Upload first file (backend processes one at a time)
         const file = files[0]
-        const result = await uploadDocument(file, modelId, backendUrl)
+        const result = await uploadDocument(file, modelId, backendUrl, apiKeys, startPage, endPage)
         setLastJobId(result.job_id)
 
         addJob({
@@ -61,7 +63,7 @@ export function useFileUpload() {
         // If multiple files, upload remaining sequentially
         for (let i = 1; i < files.length; i++) {
           const f = files[i]
-          const r = await uploadDocument(f, modelId, backendUrl)
+          const r = await uploadDocument(f, modelId, backendUrl, apiKeys, startPage, endPage)
           addJob({
             job_id: r.job_id,
             status: r.status,
@@ -79,7 +81,7 @@ export function useFileUpload() {
         setState(STATES.ERROR)
       }
     },
-    [files, backendUrl, addJob]
+    [files, backendUrl, addJob, apiKeys]
   )
 
   const reset = useCallback(() => {

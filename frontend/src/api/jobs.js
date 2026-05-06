@@ -20,10 +20,27 @@ function normalizeJob(job) {
  * @param {string} baseUrl
  * @returns {{ job_id: string, status: string, message: string }}
  */
-export async function uploadDocument(file, modelId = 'qwen3-vl-30b', baseUrl = '') {
+export async function uploadDocument(file, modelId = 'qwen3-vl-30b', baseUrl = '', apiKeys = null, startPage = null, endPage = null) {
   const form = new FormData()
   form.append('file', file)
   form.append('model_id', modelId)
+  
+  if (apiKeys) {
+    // Only pass keys that have values to avoid empty overrides
+    const validKeys = Object.fromEntries(
+      Object.entries(apiKeys).filter(([_, v]) => v && v.trim() !== '')
+    )
+    if (Object.keys(validKeys).length > 0) {
+      form.append('api_keys', JSON.stringify(validKeys))
+    }
+  }
+
+  if (startPage) {
+    form.append('start_page', startPage)
+  }
+  if (endPage) {
+    form.append('end_page', endPage)
+  }
 
   return apiFetch('/v1/process_document', {
     method: 'POST',

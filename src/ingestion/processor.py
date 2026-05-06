@@ -1,111 +1,117 @@
+"""Document processor — orchestrates document processing via the pipeline engine.
+
+This module provides:
+- ``get_cached_model``: Thread-safe model cache lookup/load.
+- ``process_document_job``: Entry point called by the ingestion queue worker.
+
+The processor delegates to :class:`PipelineExecutor` for the actual
+processing flow, keeping this module as a thin adapter between the
+queue layer and the pipeline engine.
+"""
+
 import logging
-import asyncio
 from pathlib import Path
-from typing import Dict, Any
-from src.utils.config import ConfigLoader
-from src.models import ModelLoader
-from src.ingestion.converter import DocumentConverter
+from typing import Any, Dict, Optional
+
+from src.models.cache import ModelCacheManager
 
 logger = logging.getLogger(__name__)
 
-# Global Model Cache
-# Structure: {"model_id": model_instance}
-MODEL_CACHE: Dict[str, Any] = {}
-MODEL_LOCK = asyncio.Lock()
+# ---------------------------------------------------------------------------
+# Model Cache — uses ModelCacheManager with LRU eviction + OOM protection
+# ---------------------------------------------------------------------------
+
+_model_cache = ModelCacheManager(max_models=3)
 
 
-async def get_cached_model(model_id: str):
+async def get_cached_model(
+    model_id: str, api_keys: Optional[Dict[str, str]] = None
+) -> Any:
+    """Retrieve model from cache or load it if not present.
+
+    Thin wrapper around :class:`ModelCacheManager.get_or_load` that
+    preserves the function signature for backward compatibility.
+
+    Args:
+        model_id: Model identifier as defined in models.yaml.
+        api_keys: Optional API key overrides for cloud models.
+
+    Returns:
+        Loaded model instance.
+
+    Raises:
+        RuntimeError: If model loading fails.
     """
-    Retrieve model from cache or load it if not present.
-    """
-    async with MODEL_LOCK:
-        if model_id in MODEL_CACHE:
-            return MODEL_CACHE[model_id]
-
-        logger.info(f"Model {model_id} not in cache. Loading...")
-        try:
-            model_config = ConfigLoader.get_model_config(model_id)
-            model = ModelLoader.load_model(model_config)
-            MODEL_CACHE[model_id] = model
-            return model
-        except Exception as e:
-            logger.error(f"Failed to load model {model_id}: {e}")
-            raise e
+    return await _model_cache.get_or_load(model_id, api_keys)
 
 
-async def process_document_job(file_path: str, model_id: str = "qwen2-vl-2b-instruct") -> dict:
-    """
-    Background task to process a document.
-    Handles PDF conversion, Office text extraction, and multi-page processing.
+# ---------------------------------------------------------------------------
+# Document Processing Entry Point
+# ---------------------------------------------------------------------------
+
+
+async def process_document_job(
+    file_path: str,
+    model_id: str = "qwen2-vl-2b-instruct",
+    api_keys: Optional[Dict[str, str]] = None,
+    start_page: Optional[int] = None,
+    end_page: Optional[int] = None,
+) -> dict:
+    """Background task to process a document via the pipeline engine.
+
+    This function is the entry point called by :class:`IngestionQueue`.
+    It builds a :class:`PipelineContext`, runs the ``basic`` pipeline,
+    and returns the formatted output dict.
+
+    The function signature is intentionally unchanged from the original
+    monolithic implementation to preserve backward compatibility with
+    the queue worker and all existing tests.
 
     Args:
         file_path: Path to the document file.
-        model_id: Model identifier to use for processing. Defaults to qwen2-vl-2b-instruct.
+        model_id: Model identifier to use for processing.
+        api_keys: Optional dictionary of API keys to override env vars.
+        start_page: Optional 1-indexed start page (inclusive).
+        end_page: Optional 1-indexed end page (inclusive).
+
+    Returns:
+        Dict with ``content`` and ``page_count`` on success,
+        or ``error`` key on failure.
     """
     try:
         path = Path(file_path)
         if not path.exists():
             raise FileNotFoundError(f"File not found: {file_path}")
 
-        logger.info(f"Starting processing for file: {file_path}")
+        logger.info("Starting processing for file: %s", file_path)
 
-        # 1. Convert/Load Document content
-        # Returns List[Image.Image] OR List[str]
-        try:
-            content_items = DocumentConverter.convert(path)
-        except Exception as e:
-            return {"error": f"Document conversion failed: {str(e)}"}
+        # Import here to avoid circular imports at module level
+        from src.pipeline import PipelineContext, PipelineExecutor
 
-        if not content_items:
-            return {"error": "No processable content found in document."}
+        context = PipelineContext(
+            file_path=path,
+            model_id=model_id,
+            api_keys=api_keys,
+            start_page=start_page,
+            end_page=end_page,
+        )
 
-        # 2. Get Cached Model
-        model = await get_cached_model(model_id)
+        executor = PipelineExecutor(pipeline_name="basic")
+        result_ctx = await executor.execute(context)
 
-        # 3. Process Items (Pages/Slides/Sheets)
-        results = []
-        loop = asyncio.get_event_loop()
+        if result_ctx.formatted_output:
+            logger.info("Processing complete for %s", file_path)
+            return result_ctx.formatted_output
 
-        from PIL import Image
+        return {"error": "Pipeline produced no output."}
 
-        for i, item in enumerate(content_items):
-            logger.info(f"Processing item {i+1}/{len(content_items)}...")
-
-            if isinstance(item, str):
-                # Text Path (Office Files)
-                # We feed the text as part of the prompt
-                analysis_prompt = (
-                    f"Analyze the following document content and extract key information:\n\n{item}"
-                )
-
-                page_result = await loop.run_in_executor(
-                    None, lambda: model.process(prompt=analysis_prompt, image=None)
-                )
-                results.append(page_result.get("content", ""))
-
-            elif isinstance(item, Image.Image):
-                # Visual Path (Images/PDF)
-                prompt = "Analyze this page/image and extract the whole content in detail."
-
-                # Convert PIL to bytes
-                import io
-
-                img_byte_arr = io.BytesIO()
-                item.save(img_byte_arr, format="PNG")
-                img_bytes = img_byte_arr.getvalue()
-
-                page_result = await loop.run_in_executor(
-                    None, lambda: model.process(image=img_bytes, prompt=prompt)
-                )
-                results.append(page_result.get("content", ""))
-
-        # 4. Aggregate Results
-        full_content = "\n\n--- ITEM BREAK ---\n\n".join(results)
-
-        logger.info(f"Processing complete for {file_path}")
-
-        return {"content": full_content, "page_count": len(content_items)}
-
+    except FileNotFoundError:
+        raise
     except Exception as e:
-        logger.error(f"Failed to process document {file_path}: {e}", exc_info=True)
+        # Catch pipeline/conversion errors and return error dict
+        # to match original behavior (some errors returned as dict, some raised)
+        error_msg = str(e)
+        if "conversion" in error_msg.lower() or "no processable" in error_msg.lower():
+            return {"error": f"Document conversion failed: {error_msg}"}
+        logger.error("Failed to process document %s: %s", file_path, e, exc_info=True)
         raise

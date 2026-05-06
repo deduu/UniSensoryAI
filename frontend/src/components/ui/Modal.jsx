@@ -27,7 +27,7 @@ export default function Modal({ open, onClose, title, children, wide = false }) 
     <div className="fixed inset-0 z-50 flex items-center justify-center animate-fade-in">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
       <div
-        className={`relative z-10 mx-4 max-h-[85vh] overflow-auto rounded-2xl bg-white shadow-modal ${
+        className={`relative z-10 mx-4 max-h-[85vh] overflow-auto rounded-2xl bg-surface shadow-modal ${
           wide ? 'w-full max-w-4xl' : 'w-full max-w-lg'
         }`}
       >

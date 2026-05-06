@@ -49,7 +49,7 @@ export default function JobDetailPanel({ job, onClose }) {
   }
 
   return (
-    <div className="fixed inset-y-0 right-0 z-40 w-full max-w-md animate-slide-in border-l border-surface-border bg-white shadow-modal">
+    <div className="fixed inset-y-0 right-0 z-40 w-full max-w-md animate-slide-in border-l border-surface-border bg-surface shadow-modal">
       <div className="flex h-16 items-center justify-between border-b border-surface-border px-6">
         <h2 className="text-lg font-semibold text-ink">Job Details</h2>
         <button
@@ -137,7 +137,7 @@ export default function JobDetailPanel({ job, onClose }) {
                       </span>
                     </div>
                     {doc.content_text && (
-                      <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap rounded bg-white p-2 font-mono text-xs text-ink-muted">
+                      <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap rounded bg-surface-muted/50 p-2 font-mono text-xs text-ink-muted">
                         {doc.content_text}
                       </pre>
                     )}

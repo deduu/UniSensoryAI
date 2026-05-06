@@ -54,7 +54,7 @@ function UploadTab() {
         <select
           value={modelId}
           onChange={(e) => setModelId(e.target.value)}
-          className="w-full rounded-lg border border-surface-border bg-white px-3 py-2.5 text-sm text-ink focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+          className="w-full rounded-lg border border-surface-border bg-surface-muted px-3 py-2.5 text-sm text-ink focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
         >
           {AVAILABLE_MODELS.map((m) => (
             <option key={m.id} value={m.id}>

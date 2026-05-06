@@ -1,127 +1,104 @@
-# UniSensoryAI
+<div align="center">
+  <h1>✨ UniSensoryAI ✨</h1>
+  <p><b>A unified, modular AI agent system for multi-modal document perception and understanding.</b></p>
 
-A unified, modular AI agent system for multi-modal document perception and understanding.
+  <p>
+    <a href="https://github.com/yourusername/UniSensoryAI/blob/main/LICENSE">
+      <img src="https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge&color=6366f1" alt="License" />
+    </a>
+    <a href="https://www.python.org/downloads/">
+      <img src="https://img.shields.io/badge/Python-3.10+-blue.svg?style=for-the-badge&logo=python&logoColor=white&color=10b981" alt="Python Version" />
+    </a>
+    <a href="https://react.dev/">
+      <img src="https://img.shields.io/badge/React-18+-blue.svg?style=for-the-badge&logo=react&logoColor=white&color=0ea5e9" alt="React Version" />
+    </a>
+  </p>
+</div>
 
-## Overview
+---
 
-UniSensoryAI processes various document types (PDF, Excel, Word, PowerPoint, images) using vision-language models with a clean, extensible architecture. It includes an async FastAPI backend with job queuing and a React dashboard for uploading, tracking, and inspecting processed documents.
+## 🌟 Overview
 
-### Key Features
+UniSensoryAI seamlessly processes diverse document formats (PDF, Excel, Word, PowerPoint, Images) by harnessing the power of advanced Vision-Language Models (VLMs). Designed with a clean, extensible, abstraction-first architecture, it provides an async backend with robust job queuing and a beautiful, high-performance React dashboard.
 
-- **Model Agnostic**: Support for local models (Qwen, DeepSeek, LLaVA, LightOn) and cloud APIs (OpenAI, Google)
-- **Abstraction-First Design**: Every component implements an abstract interface for maximum flexibility
-- **Configuration-Driven**: Behavior defined through YAML configs, no hardcoded values
-- **Async Ingestion Pipeline**: Background job queue with rate limiting and model caching
-- **React Dashboard**: Upload documents, track jobs, inspect results, and test models interactively
-- **PostgreSQL Persistence**: Async SQLAlchemy 2.0 with Alembic migrations
+> [!NOTE]
+> UniSensoryAI enables you to effortlessly ingest, track, and inspect documents while seamlessly switching between local models and cloud providers.
 
-## Quick Start
+### ✨ Key Features
+
+- 🧠 **Model Agnostic**: Swap seamlessly between local models (Qwen, DeepSeek, LLaVA, LightOn) and cloud APIs (OpenAI, Google).
+- 🧩 **Abstraction-First Design**: Built with clean interfaces, ensuring every component is pluggable and maximally flexible.
+- ⚙️ **Configuration-Driven**: Define behavior elegantly through YAML configs—no hardcoded values.
+- 🚀 **Async Pipeline**: Background job processing with built-in rate limiting, intelligent model caching, and robust error handling.
+- 💎 **Premium Dashboard**: A sleek, dynamic React interface to upload documents, track jobs, and interactively test models.
+- 🗄️ **Persistent State**: Powered by Async SQLAlchemy 2.0 and PostgreSQL for rock-solid reliability.
+
+---
+
+## 🚀 Quick Start
 
 ### Prerequisites
 
-- Python 3.10-3.11
-- PostgreSQL 17
-- Node.js 18+
+- **Python** 3.10 - 3.11
+- **PostgreSQL** 17
+- **Node.js** 18+
 
-### Backend
+### 🛠️ Backend Setup
 
 ```bash
-# Clone and install
+# Clone the repository
 git clone <repo-url>
 cd UniSensoryAI
+
+# Install dependencies (development mode recommended)
 pip install -e ".[dev]"
 
-# Set up database
-# Ensure PostgreSQL is running, then:
+# Set up PostgreSQL database
 createdb unisensory
 alembic upgrade head
 
-# Start the API server (port 8010)
+# Launch the API server
 python -m src.api.server
 ```
+*(The API will be available at port 8010)*
 
-### Frontend
+### 💻 Frontend Setup
 
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
+*(Access the dynamic dashboard at `http://localhost:5173`)*
 
-Open `http://localhost:5173` in your browser.
+---
 
-### Test the API
+## 📡 API Reference
 
-```bash
-# Health check
-curl http://localhost:8010/health
-
-# Upload a document for processing
-curl -X POST http://localhost:8010/v1/process_document \
-     -F "file=@document.pdf" \
-     -F "model_id=qwen3-vl-30b"
-
-# List all jobs
-curl http://localhost:8010/v1/jobs
-
-# Get job status and results
-curl http://localhost:8010/v1/jobs/{job_id}
-
-# Delete a job
-curl -X DELETE http://localhost:8010/v1/jobs/{job_id}
-
-# Retry a failed job
-curl -X POST http://localhost:8010/v1/jobs/{job_id}/retry
-```
-
-## Project Structure
-
-```
-UniSensoryAI/
-├── src/
-│   ├── core/              # Abstract base classes (BaseAgent, BaseVLM, etc.)
-│   ├── models/            # VLM implementations (Qwen, DeepSeek, LLaVA, LightOn, Cloud)
-│   ├── agents/            # Document processing agents
-│   ├── ingestion/         # Queue manager, document converter, processor
-│   ├── services/          # Business logic (IngestionService, DocumentService)
-│   ├── db/                # SQLAlchemy ORM models, async session manager
-│   ├── api/               # FastAPI endpoints
-│   └── utils/             # ConfigLoader (YAML + env var expansion)
-├── frontend/              # React + Vite + Tailwind dashboard
-│   ├── src/pages/         # Dashboard, Parse, Documents, Playground, Models, Chat, Settings
-│   ├── src/components/    # Reusable UI components
-│   ├── src/hooks/         # Custom React hooks (polling, upload, job list)
-│   └── src/api/           # API client layer
-├── configs/
-│   ├── models.yaml        # Model configurations
-│   └── pipeline.yaml      # Pipeline definitions
-├── alembic/               # Database migrations
-├── tests/                 # pytest test suite
-└── pyproject.toml         # Project dependencies
-```
-
-## API Endpoints
+Explore our robust, RESTful endpoints tailored for seamless integration.
 
 | Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/health` | Health check |
+| :--- | :--- | :--- |
+| `GET` | `/health` | System health check |
 | `POST` | `/v1/process_document` | Upload document for async processing (returns `job_id`) |
-| `GET` | `/v1/jobs` | List all jobs (paginated: `?limit=50&offset=0`) |
-| `GET` | `/v1/jobs/{job_id}` | Get job status and document results |
-| `DELETE` | `/v1/jobs/{job_id}` | Delete job, documents, and uploaded file |
-| `POST` | `/v1/jobs/{job_id}/retry` | Retry a failed job |
+| `GET` | `/v1/jobs` | List jobs with pagination (`?limit=50&offset=0`) |
+| `GET` | `/v1/jobs/{job_id}` | Fetch job status and resulting artifacts |
+| `DELETE` | `/v1/jobs/{job_id}` | Erase a job and associated files |
+| `POST` | `/v1/jobs/{job_id}/retry` | Instantly retry a failed processing job |
 
-## Configuration
+---
 
-### Adding a New Model
+## ⚙️ Configuration
 
-Edit `configs/models.yaml`:
+UniSensoryAI strictly follows a configuration-over-code philosophy. 
+
+### Adding a New Model (`configs/models.yaml`)
 
 ```yaml
 models:
-  my-model:
-    provider: huggingface  # or deepseek, openai, google, qwen, llava, lightonocr
-    model_id: my-model
+  my-custom-model:
+    provider: huggingface # Options: deepseek, openai, google, qwen, llava, etc.
+    model_id: my-custom-model
     model_name: "org/model-name"
     model_type: vision-language
     config:
@@ -129,62 +106,53 @@ models:
       device_map: auto
 ```
 
-### Using the Model
+### Implementing the Model
 
 ```python
 from src.utils import ConfigLoader
 from src.models import ModelLoader
 
-config = ConfigLoader.get_model_config("my-model")
+config = ConfigLoader.get_model_config("my-custom-model")
 model = ModelLoader.load_model(config)
-result = model.process(image=image_bytes, prompt="Describe this image")
+result = model.process(image=image_bytes, prompt="Describe this image dynamically")
 ```
 
-## Development
+---
 
-### Code Quality
+## 🏗️ Project Architecture
+
+```mermaid
+graph TD
+    UI[✨ Premium React Dashboard] -->|REST API| API[⚡ FastAPI Server]
+    API --> Queue[📥 Ingestion Queue]
+    Queue --> Engine[🧠 Processing Engine]
+    Engine --> DB[(🗄️ PostgreSQL)]
+    Engine --> VLM[🤖 Vision-Language Models]
+    
+    style UI fill:#6366f1,stroke:#4f46e5,stroke-width:2px,color:#fff
+    style API fill:#10b981,stroke:#059669,stroke-width:2px,color:#fff
+    style Engine fill:#f59e0b,stroke:#d97706,stroke-width:2px,color:#fff
+    style DB fill:#3b82f6,stroke:#2563eb,stroke-width:2px,color:#fff
+```
+
+---
+
+## 🛠️ Development
+
+Maintain highest code quality standards with our pre-configured toolkit:
 
 ```bash
-black src/ tests/        # Format
-isort src/ tests/        # Sort imports
-ruff check src/ tests/   # Lint
-mypy src/                # Type check
+black src/ tests/        # Formatting
+isort src/ tests/        # Import sorting
+ruff check src/ tests/   # Fast linting
+mypy src/                # Strict type checking
+
+# Testing
+pytest tests/ -v         # Run test suite
 ```
 
-### Testing
+---
 
-```bash
-pytest tests/ -v                          # Run all tests
-pytest tests/unit/test_api.py -v --no-cov # API endpoint tests only
-pytest -x -q                              # Stop on first failure
-```
+## 📜 License
 
-### Environment Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `DATABASE_URL` | `postgresql+asyncpg://postgres:postgres@localhost:5433/unisensory` | Async PostgreSQL connection |
-| `VITE_API_URL` | `http://localhost:8010` | Frontend API base URL |
-
-## Current Status
-
-Completed:
-- Core abstract base classes and factory pattern model loading
-- VLM implementations: Qwen, DeepSeek, LLaVA, LightOn OCR, Cloud APIs (OpenAI, Google)
-- YAML-driven configuration system
-- FastAPI server with full CRUD job endpoints
-- Async ingestion pipeline with rate limiting and model caching
-- Document conversion: PDF (to images), DOCX, PPTX, XLSX (text extraction)
-- PostgreSQL persistence with SQLAlchemy 2.0 async and Alembic migrations
-- React dashboard with upload, job tracking, polling, and interactive playground
-- Comprehensive API test suite (21 tests covering all endpoints)
-
-Next steps:
-- Authentication and authorization
-- Pipeline orchestration for multi-stage workflows
-- Additional document agents (beyond Excel)
-- Structured logging migration (structlog)
-
-## License
-
-MIT
+Released under the [MIT License](LICENSE). Build something extraordinary! ✨

@@ -5,15 +5,22 @@ export default function SidebarItem({ to, icon: Icon, label }) {
     <NavLink
       to={to}
       className={({ isActive }) =>
-        `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+        `group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-300 ${
           isActive
-            ? 'border-l-2 border-brand bg-sidebar-active text-sidebar-text-active'
-            : 'border-l-2 border-transparent text-sidebar-text hover:bg-sidebar-hover hover:text-sidebar-text-active'
+            ? 'bg-brand/10 text-white shadow-[inset_2px_0_0_0_#6366f1]'
+            : 'text-sidebar-text hover:bg-surface-muted hover:text-white'
         }`
       }
     >
-      <Icon className="h-5 w-5 shrink-0" />
-      <span>{label}</span>
+      {({ isActive }) => (
+        <>
+          <Icon className={`h-5 w-5 shrink-0 transition-colors duration-300 ${isActive ? 'text-brand drop-shadow-[0_0_8px_rgba(99,102,241,0.8)]' : 'group-hover:text-brand/70'}`} />
+          <span>{label}</span>
+          {isActive && (
+            <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-brand/5 to-transparent pointer-events-none"></div>
+          )}
+        </>
+      )}
     </NavLink>
   )
 }

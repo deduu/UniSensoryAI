@@ -4,7 +4,7 @@ const VARIANTS = {
   primary:
     'bg-brand text-white hover:bg-brand-hover focus:ring-brand/50',
   secondary:
-    'border border-surface-border bg-white text-ink hover:bg-surface-subtle focus:ring-brand/50',
+    'border border-surface-border bg-transparent text-ink hover:bg-surface-subtle focus:ring-brand/50',
   ghost:
     'text-ink-muted hover:bg-surface-subtle focus:ring-brand/50',
   danger:
