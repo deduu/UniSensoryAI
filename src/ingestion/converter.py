@@ -21,6 +21,11 @@ try:
 except ImportError:
     openpyxl = None
 
+try:
+    import mammoth
+except ImportError:
+    mammoth = None
+
 logger = logging.getLogger(__name__)
 
 
@@ -103,39 +108,37 @@ class DocumentConverter:
             return DocumentConverter._pptx_to_html(path)
         raise ValueError(f"HTML preview not supported for {ext}")
 
+    _DOCX_STYLE_MAP = "\n".join(
+        [
+            "p[style-name='Title'] => h1.title:fresh",
+            "p[style-name='Subtitle'] => h2.subtitle:fresh",
+            "p[style-name='Heading 1'] => h1:fresh",
+            "p[style-name='Heading 2'] => h2:fresh",
+            "p[style-name='Heading 3'] => h3:fresh",
+            "p[style-name='Heading 4'] => h4:fresh",
+            "p[style-name='Heading 5'] => h5:fresh",
+            "p[style-name='Heading 6'] => h6:fresh",
+            "p[style-name='Quote'] => blockquote:fresh",
+            "p[style-name='Intense Quote'] => blockquote.intense:fresh",
+        ]
+    )
+
     @staticmethod
     def _docx_to_html(path: Path) -> str:
-        if not docx:
-            raise ImportError("python-docx is not available.")
-        doc = docx.Document(path)
-        parts = [f'<!DOCTYPE html><html><head><meta charset="utf-8"><style>{_HTML_BASE_STYLE}</style></head><body>']
-        for para in doc.paragraphs:
-            style = para.style.name
-            text = para.text
-            if not text.strip():
-                parts.append("<br>")
-                continue
-            safe = _esc(text)
-            if "Heading 1" in style:
-                parts.append(f"<h1>{safe}</h1>")
-            elif "Heading 2" in style:
-                parts.append(f"<h2>{safe}</h2>")
-            elif "Heading 3" in style:
-                parts.append(f"<h3>{safe}</h3>")
-            elif any(f"Heading {n}" in style for n in ("4", "5", "6")):
-                parts.append(f"<h4>{safe}</h4>")
-            elif "List" in style:
-                parts.append(f"<li>{safe}</li>")
-            else:
-                parts.append(f"<p>{safe}</p>")
-        for table in doc.tables:
-            parts.append("<table>")
-            for i, row in enumerate(table.rows):
-                tag = "th" if i == 0 else "td"
-                parts.append("<tr>" + "".join(f"<{tag}>{_esc(cell.text)}</{tag}>" for cell in row.cells) + "</tr>")
-            parts.append("</table>")
-        parts.append("</body></html>")
-        return "\n".join(parts)
+        if not mammoth:
+            raise ImportError("mammoth is not available.")
+        with path.open("rb") as f:
+            result = mammoth.convert_to_html(
+                f, style_map=DocumentConverter._DOCX_STYLE_MAP
+            )
+        for message in result.messages:
+            logger.debug("mammoth message for %s: %s", path.name, message)
+        return (
+            '<!DOCTYPE html><html><head><meta charset="utf-8">'
+            f"<style>{_HTML_BASE_STYLE}</style></head><body>"
+            f"{result.value}"
+            "</body></html>"
+        )
 
     @staticmethod
     def _xlsx_to_html(path: Path) -> str:
@@ -320,32 +323,48 @@ class DocumentConverter:
         logger.info(f"Extracting text from DOCX {path.name}...")
         try:
             doc = docx.Document(path)
-            full_text = []
+            blocks: List[str] = []
+            list_buffer: List[str] = []
+
+            def flush_list() -> None:
+                if list_buffer:
+                    blocks.append("\n".join(list_buffer))
+                    list_buffer.clear()
+
             for para in doc.paragraphs:
                 text = para.text.strip()
                 if not text:
                     continue
                 style = para.style.name if para.style else ""
                 if "Heading 1" in style:
-                    full_text.append(f"# {text}")
+                    flush_list()
+                    blocks.append(f"# {text}")
                 elif "Heading 2" in style:
-                    full_text.append(f"## {text}")
+                    flush_list()
+                    blocks.append(f"## {text}")
                 elif "Heading 3" in style:
-                    full_text.append(f"### {text}")
+                    flush_list()
+                    blocks.append(f"### {text}")
                 elif any(f"Heading {level}" in style for level in ("4", "5", "6")):
-                    full_text.append(f"#### {text}")
+                    flush_list()
+                    blocks.append(f"#### {text}")
                 elif "List" in style:
-                    full_text.append(f"- {text}")
+                    list_buffer.append(f"- {text}")
                 else:
-                    full_text.append(text)
+                    flush_list()
+                    blocks.append(text)
+            flush_list()
+
             for table in doc.tables:
                 rows = []
                 for row in table.rows:
                     cells = [cell.text.strip() for cell in row.cells]
                     if any(cells):
                         rows.append(cells)
-                full_text.extend(_markdown_table(rows))
-            return ["\n".join(full_text)] if full_text else []
+                if rows:
+                    blocks.append("\n".join(_markdown_table(rows)))
+
+            return ["\n\n".join(blocks)] if blocks else []
         except Exception as e:
             logger.error(f"Failed to parse DOCX {path}: {e}")
             raise

@@ -52,8 +52,8 @@ def main():
     try:
         # Check if DATABASE_URL is set, if not result to default
         if "DATABASE_URL" not in os.environ:
-            # Try loading from .env manually or default to 5433
-             os.environ["DATABASE_URL"] = "postgresql+asyncpg://postgres:postgres@localhost:5433/unisensory"
+            # Try loading from .env manually or default to 5434
+             os.environ["DATABASE_URL"] = "postgresql+asyncpg://postgres:postgres@localhost:5434/unisensory"
             
         subprocess.run(["uv", "run", "alembic", "upgrade", "head"], check=True)
         print("✅ Migrations applied successfully!")
@@ -62,7 +62,7 @@ def main():
         sys.exit(1)
         
     print("\n✨ Development environment ready!")
-    print("Public DB URL: postgresql://postgres:postgres@localhost:5433/unisensory")
+    print("Public DB URL: postgresql://postgres:postgres@localhost:5434/unisensory")
 
 if __name__ == "__main__":
     main()

@@ -9,17 +9,27 @@ web_search:
 
 trusted_sources:
   enabled: true
-  max_sources: 5
+  max_sources: 4
   sources:
-    - name: "Wesleyan Generative AI Usage Policy"
-      url: "https://www.wesleyan.edu/its/policies/Generative%20AI%20Policy.html"
-      topics: ["generative ai", "public ai", "sensitive data", "student records"]
-    - name: "Wesleyan Data Classification Policy"
-      url: "https://www.wesleyan.edu/its/policies/data-classification-policy.html"
-      topics: ["data classification", "restricted data", "confidential data", "student records", "ferpa"]
-    - name: "Wesleyan Technology Acceptable Use Policy"
-      url: "https://www.wesleyan.edu/its/policies/technology_aup.html"
-      topics: ["acceptable use", "technology", "data use", "external services"]
-    - name: "Wesleyan Record Retention Policy"
-      url: "https://www.wesleyan.edu/generalcounsel/2013%20Policies/Wesleyan%20University%20Document%20Retention%20Policy%20FINAL%20030617.pdf"
-      topics: ["records retention", "deletion", "litigation hold", "retention"]
+    - name: "NIST AI Risk Management Framework"
+      url: "https://www.nist.gov/itl/ai-risk-management-framework"
+      topics: ["ai risk management", "ai governance", "trustworthy ai", "ai assessment", "ai measurement"]
+    - name: "OECD AI Principles"
+      url: "https://oecd.ai/en/ai-principles"
+      topics: ["ai principles", "trustworthy ai", "human-centered ai", "ai accountability", "international ai policy"]
+    - name: "EU AI Act"
+      url: "https://artificialintelligenceact.eu/the-act/"
+      topics: ["eu ai act", "high-risk ai", "ai regulation", "prohibited ai", "ai compliance"]
+    - name: "White House Executive Order on AI"
+      url: "https://www.whitehouse.gov/briefing-room/presidential-actions/2023/10/30/executive-order-on-the-safe-secure-and-trustworthy-development-and-use-of-artificial-intelligence/"
+      topics: ["ai executive order", "safe ai", "secure ai", "ai oversight", "federal ai policy"]
+
+llm:
+  enabled: true
+  provider: anthropic
+  model: claude-opus-4-7
+  api_key_env: ANTHROPIC_API_KEY
+  max_tokens: 4000
+  enable_prompt_cache: true
+  max_proposal_clauses: 30
+  max_reference_chars: 12000

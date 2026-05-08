@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 
+from .llm_comparator import LLMComparator, LLMComparatorConfig
 from .models import (
     PolicyAgentResult,
     PolicyClause,
@@ -594,6 +595,97 @@ class WebSearchPolicyReferenceAgent:
             candidates, key=lambda item: item[0]
         )
         return reference_text, reference_stance, overlap, shared_tokens, matched_from_page
+
+
+class LLMPolicyConflictAgent:
+    """Use a Claude model to flag semantic conflicts the heuristic agents miss."""
+
+    def __init__(
+        self,
+        *,
+        comparator: LLMComparator | None = None,
+    ) -> None:
+        if comparator is None:
+            try:
+                policy_config = ConfigLoader.get_policy_config()
+            except FileNotFoundError:
+                policy_config = {}
+            config = LLMComparatorConfig.from_policy_config(policy_config)
+            comparator = LLMComparator(config=config)
+        self._comparator = comparator
+
+    @property
+    def name(self) -> str:
+        return "llm_policy_conflict"
+
+    async def review(self, context: PolicyReviewContext) -> PolicyAgentResult:
+        config = self._comparator.config
+
+        if not config.enabled:
+            return PolicyAgentResult(
+                agent_name=self.name,
+                notes=["LLM policy comparator is disabled in policy.yaml."],
+                metadata={"skipped": True, "reason": "disabled"},
+            )
+
+        if not config.api_key:
+            return PolicyAgentResult(
+                agent_name=self.name,
+                notes=[
+                    f"LLM policy comparator skipped: {config.api_key_env} is not set."
+                ],
+                metadata={"skipped": True, "reason": "missing_api_key"},
+            )
+
+        if not context.policy_text or not context.policy_text.strip():
+            return PolicyAgentResult(
+                agent_name=self.name,
+                notes=["No proposal text was available for LLM comparison."],
+                metadata={"skipped": True, "reason": "empty_proposal"},
+            )
+
+        if not context.reference_documents:
+            return PolicyAgentResult(
+                agent_name=self.name,
+                notes=[
+                    "No reference clauses were available for LLM comparison. "
+                    "Ingest existing policies first or enable database references."
+                ],
+                metadata={"skipped": True, "reason": "no_references"},
+            )
+
+        try:
+            findings = await self._comparator.compare(
+                proposal_text=context.policy_text,
+                reference_clauses=list(context.reference_documents),
+                proposal_document_id=context.policy_document_id,
+                proposal_filename=context.policy_filename,
+                focus=context.focus,
+            )
+        except Exception as exc:  # noqa: BLE001 - return as agent error
+            return PolicyAgentResult(
+                agent_name=self.name,
+                notes=[f"LLM policy comparator failed: {exc}"],
+                metadata={"error": str(exc)},
+            )
+
+        notes: list[str] = []
+        if not findings:
+            notes.append(
+                "LLM comparator found no substantive conflicts against the "
+                "available reference clauses."
+            )
+
+        return PolicyAgentResult(
+            agent_name=self.name,
+            findings=findings,
+            notes=notes,
+            metadata={
+                "model": config.model,
+                "references_considered": len(context.reference_documents),
+                "findings_returned": len(findings),
+            },
+        )
 
 
 def _stance_phrase(stance: str) -> str:

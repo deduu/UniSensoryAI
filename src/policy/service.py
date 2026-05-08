@@ -12,6 +12,7 @@ from src.services.exceptions import NotFoundException
 
 from .agents import (
     DatabasePolicyReferenceAgent,
+    LLMPolicyConflictAgent,
     TrustedSourcePolicyReferenceAgent,
     UploadedPolicyConsistencyAgent,
     WebSearchPolicyReferenceAgent,
@@ -75,7 +76,9 @@ class PolicyReviewService:
                 DatabasePolicyReferenceAgent(),
                 TrustedSourcePolicyReferenceAgent(search_tool=self._web_search_tool),
                 WebSearchPolicyReferenceAgent(search_tool=self._web_search_tool),
-            ]
+                LLMPolicyConflictAgent(),
+            ],
+            timeout_seconds=60.0,
         )
         result = await orchestrator.run(context)
         await self._persist_review(policy_doc, result)
