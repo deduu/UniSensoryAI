@@ -5,7 +5,7 @@ from __future__ import annotations
 import httpx
 import pytest
 
-from src.policy.agents import WebSearchPolicyReferenceAgent
+from src.policy.agents import TrustedSourcePolicyReferenceAgent, WebSearchPolicyReferenceAgent
 from src.policy.models import PolicyAgentResult, PolicyReviewContext, WebSearchResult
 from src.policy.web_search import WebSearchTool
 
@@ -182,3 +182,49 @@ async def test_web_search_agent_marks_result_degraded_when_queries_fail():
     assert result.metadata["degraded"] is True
     assert result.metadata["failed_queries"] >= 1
     assert any("Public web evidence was unavailable" in note for note in result.notes)
+
+
+@pytest.mark.asyncio
+async def test_trusted_source_agent_returns_deterministic_conflict(monkeypatch):
+    monkeypatch.setattr(
+        "src.policy.agents.ConfigLoader.get_policy_config",
+        lambda: {
+            "trusted_sources": {
+                "enabled": True,
+                "max_sources": 2,
+                "sources": [
+                    {
+                        "name": "Trusted Data Policy",
+                        "url": "https://example.com/trusted-policy",
+                        "topics": ["customer data", "vendors"],
+                    }
+                ],
+            }
+        },
+    )
+    search_tool = FakeWebSearchTool(
+        results=[],
+        page_text_by_url={
+            "https://example.com/trusted-policy": (
+                "Trusted Data Policy\n"
+                "Employees must not share customer data with vendors."
+            )
+        },
+    )
+    agent = TrustedSourcePolicyReferenceAgent(search_tool=search_tool)
+    context = PolicyReviewContext(
+        job_id="job-1",
+        policy_document_id="doc-1",
+        policy_filename="new-policy.pdf",
+        policy_text="Employees may share customer data with vendors for support.",
+        include_trusted_sources=True,
+        focus="customer data",
+    )
+
+    result = await agent.review(context)
+
+    assert result.agent_name == "trusted_source_policy_reference"
+    assert len(result.findings) == 1
+    assert result.findings[0].source == "trusted_source"
+    assert result.findings[0].clauses[1].location == "https://example.com/trusted-policy"
+    assert result.findings[0].metadata["reference_excerpt_source"] == "trusted_source_page"

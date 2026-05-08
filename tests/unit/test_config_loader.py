@@ -107,7 +107,9 @@ class TestListMethods:
 
 class TestGetPolicyConfig:
     def test_get_policy_config(self):
-        """Policy config should load web search settings."""
+        """Policy config should load web search and trusted source settings."""
         config = ConfigLoader.get_policy_config()
         assert "web_search" in config
         assert config["web_search"]["provider"] == "duckduckgo"
+        assert "trusted_sources" in config
+        assert len(config["trusted_sources"]["sources"]) >= 1

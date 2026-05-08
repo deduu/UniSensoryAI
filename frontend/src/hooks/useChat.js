@@ -5,7 +5,7 @@ import { useDocuments } from './useDocuments'
 import {
   createConversation, listConversations, getConversation,
   updateConversation, deleteConversation, addMessage,
-  streamOpenAICompletion, streamGeminiCompletion,
+  streamBackendCompletion, streamGeminiCompletion,
 } from '../api/chat'
 import { AVAILABLE_MODELS } from '../api/models'
 
@@ -184,9 +184,10 @@ export function useChat() {
         config.apiKey = apiKeys.GOOGLE_API_KEY
         stream = streamGeminiCompletion(llmMessages, config)
       } else {
+        // Route through backend; .env keys take priority, Settings keys are fallback
         config.apiKey = apiKeys.OPENAI_API_KEY
         config.apiBase = apiKeys.OPENAI_API_BASE
-        stream = streamOpenAICompletion(llmMessages, config)
+        stream = streamBackendCompletion(llmMessages, config, backendUrl)
       }
 
       const controller = new AbortController()

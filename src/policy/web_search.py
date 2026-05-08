@@ -259,6 +259,8 @@ class WebSearchTool:
             response = await client.get(url)
             response.raise_for_status()
             content_type = (response.headers.get("content-type") or "").lower()
+            if "pdf" in content_type or url.lower().endswith(".pdf"):
+                return self.extract_pdf_text(response.content, max_chars=max_chars)
             if "html" not in content_type and response.text.lstrip()[:1] != "<":
                 return ""
             return self.extract_page_text(response.text, max_chars=max_chars)
@@ -344,3 +346,30 @@ class WebSearchTool:
             if total_chars >= max_chars:
                 break
         return "\n".join(deduped)
+
+    @classmethod
+    def extract_pdf_text(cls, pdf_bytes: bytes, *, max_chars: int = 20000) -> str:
+        """Extract text from a remote PDF payload."""
+        try:
+            import fitz
+        except ImportError:
+            return ""
+
+        text_parts: list[str] = []
+        total_chars = 0
+        document = fitz.open(stream=pdf_bytes, filetype="pdf")
+        try:
+            for page in document:
+                page_text = page.get_text("text")
+                if not page_text:
+                    continue
+                cleaned = _clean_html_text(page_text.replace("\r", "\n"))
+                if not cleaned:
+                    continue
+                text_parts.append(page_text)
+                total_chars += len(page_text)
+                if total_chars >= max_chars:
+                    break
+        finally:
+            document.close()
+        return "\n".join(text_parts)[:max_chars]

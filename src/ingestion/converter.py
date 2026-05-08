@@ -29,6 +29,28 @@ def _esc(text: str) -> str:
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
+def _md(text: Any) -> str:
+    """Escape text for Markdown table cells."""
+    return str(text).replace("\\", "\\\\").replace("|", "\\|").strip()
+
+
+def _markdown_table(rows: list[list[str]]) -> list[str]:
+    """Render rows as a GitHub-flavored Markdown table."""
+    if not rows:
+        return []
+
+    width = max(len(row) for row in rows)
+    normalized = [row + [""] * (width - len(row)) for row in rows]
+    header = normalized[0]
+    lines = [
+        "| " + " | ".join(_md(cell) for cell in header) + " |",
+        "| " + " | ".join("---" for _ in header) + " |",
+    ]
+    for row in normalized[1:]:
+        lines.append("| " + " | ".join(_md(cell) for cell in row) + " |")
+    return lines
+
+
 _HTML_BASE_STYLE = (
     "body{font-family:Georgia,serif;max-width:760px;margin:2rem auto;"
     "padding:0 1.5rem;color:#1a1a1a;line-height:1.75;font-size:15px}"
@@ -289,7 +311,7 @@ class DocumentConverter:
 
     @staticmethod
     def _extract_docx(path: Path) -> List[str]:
-        """Extract text from DOCX."""
+        """Extract DOCX content as faithful Markdown."""
         if not docx:
             raise ImportError(
                 "python-docx is installed but failed to import. Please check environment."
@@ -300,17 +322,29 @@ class DocumentConverter:
             doc = docx.Document(path)
             full_text = []
             for para in doc.paragraphs:
-                if para.text.strip():
-                    full_text.append(para.text)
+                text = para.text.strip()
+                if not text:
+                    continue
+                style = para.style.name if para.style else ""
+                if "Heading 1" in style:
+                    full_text.append(f"# {text}")
+                elif "Heading 2" in style:
+                    full_text.append(f"## {text}")
+                elif "Heading 3" in style:
+                    full_text.append(f"### {text}")
+                elif any(f"Heading {level}" in style for level in ("4", "5", "6")):
+                    full_text.append(f"#### {text}")
+                elif "List" in style:
+                    full_text.append(f"- {text}")
+                else:
+                    full_text.append(text)
             for table in doc.tables:
+                rows = []
                 for row in table.rows:
-                    cells = [
-                        cell.text.strip()
-                        for cell in row.cells
-                        if cell.text and cell.text.strip()
-                    ]
-                    if cells:
-                        full_text.append(" | ".join(cells))
+                    cells = [cell.text.strip() for cell in row.cells]
+                    if any(cells):
+                        rows.append(cells)
+                full_text.extend(_markdown_table(rows))
             return ["\n".join(full_text)] if full_text else []
         except Exception as e:
             logger.error(f"Failed to parse DOCX {path}: {e}")
@@ -322,7 +356,7 @@ class DocumentConverter:
         start_page: Optional[int] = None,
         end_page: Optional[int] = None,
     ) -> List[str]:
-        """Extract text from PPTX (one string per slide), optionally filtering by slide range."""
+        """Extract PPTX content as Markdown, optionally filtering by slide range."""
         if not pptx:
             raise ImportError("python-pptx is installed but failed to import.")
 
@@ -347,7 +381,7 @@ class DocumentConverter:
                         text_runs.append(shape.text)
 
                 if text_runs:
-                    slides_text.append(f"Slide {i+1}:\n" + "\n".join(text_runs))
+                    slides_text.append(f"## Slide {i + 1}\n\n" + "\n\n".join(text_runs))
             return slides_text
         except ValueError:
             raise
@@ -361,7 +395,7 @@ class DocumentConverter:
         start_page: Optional[int] = None,
         end_page: Optional[int] = None,
     ) -> List[str]:
-        """Extract text from XLSX (one string per sheet), optionally filtering by sheet range."""
+        """Extract XLSX content as Markdown tables, optionally filtering by sheet range."""
         if not openpyxl:
             raise ImportError("openpyxl is installed but failed to import.")
 
@@ -383,13 +417,14 @@ class DocumentConverter:
                 sheet = wb[sheetname]
                 rows = []
                 for row in sheet.iter_rows(values_only=True):
-                    # Filter None
-                    row_text = [str(cell) for cell in row if cell is not None]
-                    if row_text:
-                        rows.append(" | ".join(row_text))
+                    row_text = ["" if cell is None else str(cell) for cell in row]
+                    if any(cell.strip() for cell in row_text):
+                        rows.append(row_text)
 
                 if rows:
-                    sheets_text.append(f"Sheet '{sheetname}':\n" + "\n".join(rows))
+                    sheets_text.append(
+                        f"## {sheetname}\n\n" + "\n".join(_markdown_table(rows))
+                    )
             return sheets_text
         except ValueError:
             raise

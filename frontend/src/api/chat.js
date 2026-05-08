@@ -48,6 +48,61 @@ export async function addMessage(conversationId, data, baseUrl = '') {
 }
 
 /**
+ * Stream chat completion through the backend proxy.
+ * The backend uses OPENAI_API_KEY / OPENAI_API_BASE from .env first,
+ * falling back to keys passed here (from Settings) if env vars are absent.
+ */
+export async function* streamBackendCompletion(messages, config, baseUrl = '') {
+  const { apiKey, apiBase, model, temperature = 0.7 } = config
+
+  const response = await fetch(`${baseUrl}/v1/chat/completions/stream`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      messages,
+      model,
+      temperature,
+      ...(apiKey ? { api_key: apiKey } : {}),
+      ...(apiBase ? { api_base: apiBase } : {}),
+    }),
+  })
+
+  if (!response.ok) {
+    const err = await response.text()
+    throw new Error(`Chat API error ${response.status}: ${err}`)
+  }
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split('\n')
+    buffer = lines.pop() || ''
+
+    for (const line of lines) {
+      const trimmed = line.trim()
+      if (!trimmed || !trimmed.startsWith('data: ')) continue
+      const data = trimmed.slice(6)
+      if (data === '[DONE]') return
+
+      try {
+        const parsed = JSON.parse(data)
+        if (parsed.error) throw new Error(parsed.error)
+        const delta = parsed.choices?.[0]?.delta?.content
+        if (delta) yield { content: delta, usage: parsed.usage }
+      } catch (e) {
+        if (e.message && !e.message.startsWith('JSON')) throw e
+      }
+    }
+  }
+}
+
+/**
  * Stream an OpenAI-compatible chat completion directly from the browser.
  * Returns an async iterator of delta content strings.
  */

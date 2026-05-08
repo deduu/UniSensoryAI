@@ -111,6 +111,9 @@ function FindingCard({ finding }) {
         {finding.metadata?.reference_excerpt_source === 'page_text' && (
           <span>Matched from external page text</span>
         )}
+        {finding.metadata?.reference_excerpt_source === 'trusted_source_page' && (
+          <span>Matched from trusted source page</span>
+        )}
         {finding.metadata?.url && (
           <a
             href={finding.metadata.url}

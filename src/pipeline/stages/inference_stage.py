@@ -75,9 +75,11 @@ class InferenceStage(BasePipelineStage):
             elif isinstance(item, Image.Image):
                 # Image path (PDF/images)
                 prompt = (
-                    "Transcribe every word, number, heading, table cell, label, and footnote "
-                    "visible on this page exactly as written. Do not summarize, paraphrase, "
-                    "interpret, or omit any content. Output the raw text only."
+                    "Convert the visible document page into faithful Markdown. Transcribe every "
+                    "word, number, heading, table cell, label, checkbox, and footnote exactly as "
+                    "written. Preserve the original structure using Markdown headings, paragraphs, "
+                    "lists, and tables. Do not summarize, paraphrase, interpret, or omit content. "
+                    "Output only the Markdown extraction."
                 )
                 img_byte_arr = io.BytesIO()
                 item.save(img_byte_arr, format="PNG")

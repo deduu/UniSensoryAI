@@ -10,6 +10,8 @@ from typing import Optional
 import shutil
 import os
 import uuid
+import json
+import httpx
 from contextlib import asynccontextmanager
 
 # DB and Queuing imports
@@ -137,7 +139,6 @@ async def process_document(
         # Parse api keys if provided
         keys_dict = None
         if api_keys:
-            import json
             try:
                 keys_dict = json.loads(api_keys)
             except Exception as e:
@@ -195,7 +196,7 @@ async def list_jobs(
                 "file_path": job.file_path,
                 "meta": job.meta,
                 "documents": [
-                    _serialize_document(doc, truncate=True)
+                    _serialize_document(doc)
                     for doc in job.documents
                 ],
             }
@@ -641,6 +642,76 @@ async def review_job_policy(
     except Exception as e:
         logger.error(f"Error reviewing policy for job {job_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ---------------------------------------------------------------------------
+# Chat completions proxy — keeps API keys server-side
+# ---------------------------------------------------------------------------
+
+@app.post("/v1/chat/completions/stream")
+async def proxy_chat_stream(request: Request):
+    """
+    Proxy OpenAI-compatible chat completions through the backend.
+    Uses OPENAI_API_KEY / OPENAI_API_BASE from .env first;
+    falls back to user-supplied keys from the request body.
+    """
+    body = await request.json()
+
+    # .env takes priority; request body is fallback
+    api_key = os.getenv("OPENAI_API_KEY") or body.get("api_key", "")
+    api_base = (
+        os.getenv("OPENAI_API_BASE")
+        or body.get("api_base", "")
+        or "https://api.openai.com/v1"
+    ).rstrip("/")
+
+    if not api_key:
+        raise HTTPException(
+            status_code=400,
+            detail="No OpenAI API key configured. Set OPENAI_API_KEY in .env or provide it in Settings.",
+        )
+
+    payload = {
+        "model": body.get("model", "gpt-4o"),
+        "messages": body.get("messages", []),
+        "temperature": body.get("temperature", 0.7),
+        "max_tokens": body.get("max_tokens", 4096),
+        "stream": True,
+    }
+
+    async def event_stream():
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                async with client.stream(
+                    "POST",
+                    f"{api_base}/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json=payload,
+                ) as resp:
+                    if resp.status_code != 200:
+                        error_body = await resp.aread()
+                        yield f"data: {json.dumps({'error': error_body.decode()})}\n\n"
+                        return
+                    async for chunk in resp.aiter_text():
+                        yield chunk
+        except httpx.TimeoutException:
+            yield f"data: {json.dumps({'error': 'Request timed out'})}\n\n"
+        except Exception as e:
+            logger.error(f"Chat proxy error: {e}", exc_info=True)
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 if __name__ == "__main__":
