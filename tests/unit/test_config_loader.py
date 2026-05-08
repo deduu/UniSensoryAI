@@ -103,3 +103,11 @@ class TestListMethods:
         qwen_models = ConfigLoader.get_models_by_provider("qwen")
         assert isinstance(qwen_models, list)
         assert "qwen2-vl-2b-instruct" in qwen_models
+
+
+class TestGetPolicyConfig:
+    def test_get_policy_config(self):
+        """Policy config should load web search settings."""
+        config = ConfigLoader.get_policy_config()
+        assert "web_search" in config
+        assert config["web_search"]["provider"] == "duckduckgo"

@@ -34,8 +34,13 @@ from src.api.auth import (
 
 
 class TestAuthConfig:
-    def test_is_enabled_default(self):
-        """Auth should be enabled by default."""
+    def test_is_disabled_by_default(self, monkeypatch):
+        """Auth should be disabled unless explicitly enabled."""
+        monkeypatch.delenv("AUTH_ENABLED", raising=False)
+        assert AuthConfig.is_enabled() is False
+
+    def test_is_enabled_when_explicit(self):
+        """Auth should be enabled when AUTH_ENABLED=true."""
         os.environ["AUTH_ENABLED"] = "true"
         assert AuthConfig.is_enabled() is True
 
@@ -120,6 +125,13 @@ class TestVerifyToken:
 
 
 class TestGetCurrentUser:
+    @pytest.mark.asyncio
+    async def test_missing_credentials_allowed_by_default(self, monkeypatch):
+        """Missing credentials should be allowed when auth is not configured."""
+        monkeypatch.delenv("AUTH_ENABLED", raising=False)
+        result = await get_current_user(credentials=None)
+        assert result is None
+
     @pytest.mark.asyncio
     async def test_auth_disabled_returns_none(self):
         """When auth is disabled, should return None."""

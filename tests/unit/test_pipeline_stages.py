@@ -159,7 +159,7 @@ class TestInferenceStage:
 
     @pytest.mark.asyncio
     async def test_processes_text_items(self):
-        """Text items should call model.process with prompt and image=None."""
+        """Text items should be preserved instead of summarized by the model."""
         mock_model = MagicMock()
         mock_model.process.return_value = {"content": "analyzed"}
 
@@ -177,10 +177,8 @@ class TestInferenceStage:
                 }
             )
 
-        assert result["raw_results"] == ["analyzed"]
-        # model.process should have been called with prompt containing the text
-        call_kwargs = mock_model.process.call_args
-        assert call_kwargs.kwargs.get("image") is None
+        assert result["raw_results"] == ["Hello world"]
+        mock_model.process.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_processes_image_items(self):
@@ -206,6 +204,9 @@ class TestInferenceStage:
         assert result["raw_results"] == ["image_result"]
         call_kwargs = mock_model.process.call_args
         assert call_kwargs.kwargs.get("image") is not None
+        prompt = call_kwargs.kwargs.get("prompt", "")
+        assert "faithful Markdown" in prompt
+        assert "Do not summarize" in prompt
 
     @pytest.mark.asyncio
     async def test_uses_cached_model(self):

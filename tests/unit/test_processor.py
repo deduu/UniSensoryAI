@@ -65,7 +65,7 @@ async def test_process_document_job_defaults_model_id(tmp_path):
 
 @pytest.mark.asyncio
 async def test_process_document_job_text_processing(tmp_path):
-    """Text content items should be sent as prompt to model.process with image=None."""
+    """Text content items should be preserved as full extracted text."""
     txt_path = tmp_path / "test.docx"
     txt_path.touch()
 
@@ -87,12 +87,8 @@ async def test_process_document_job_text_processing(tmp_path):
 
         result = await process_document_job(str(txt_path), model_id="qwen2-vl-2b-instruct")
 
-        assert "content" in result
-        # model.process should have been called with text prompt, no image
-        call_kwargs = mock_model.process.call_args
-        assert call_kwargs.kwargs.get("image") is None or (
-            "image" in call_kwargs.kwargs and call_kwargs.kwargs["image"] is None
-        )
+        assert result["content"] == "Sheet content here"
+        mock_model.process.assert_not_called()
 
 
 @pytest.mark.asyncio

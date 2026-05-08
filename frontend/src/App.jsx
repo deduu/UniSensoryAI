@@ -1,7 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import AppShell from './components/layout/AppShell'
 import Dashboard from './pages/Dashboard'
-import Documents from './pages/Documents'
 import Chat from './pages/Chat'
 import Models from './pages/Models'
 import Settings from './pages/Settings'
@@ -14,7 +13,7 @@ export default function App() {
     <Routes>
       <Route element={<AppShell />}>
         <Route index element={<Dashboard />} />
-        <Route path="documents" element={<Documents />} />
+        <Route path="documents" element={<Navigate to="/" replace />} />
         <Route path="chat" element={<Chat />} />
         <Route path="models" element={<Models />} />
         <Route path="settings" element={<Settings />} />

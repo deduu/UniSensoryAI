@@ -88,7 +88,7 @@ export function useFileUpload() {
     setFiles([])
     setState(STATES.IDLE)
     setError(null)
-    setLastJobId(null)
+    // lastJobId is intentionally kept so polling continues until the job reaches a terminal state
   }, [])
 
   return { files, state, error, lastJobId, addFiles, removeFile, upload, reset, STATES }

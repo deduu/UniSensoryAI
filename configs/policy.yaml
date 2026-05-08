@@ -1,0 +1,25 @@
+web_search:
+  provider: duckduckgo
+  base_url: "https://html.duckduckgo.com/html/"
+  lite_url: "https://lite.duckduckgo.com/lite/"
+  timeout_seconds: 10.0
+  max_results: 3
+  max_queries: 4
+  user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"
+
+trusted_sources:
+  enabled: true
+  max_sources: 5
+  sources:
+    - name: "Wesleyan Generative AI Usage Policy"
+      url: "https://www.wesleyan.edu/its/policies/Generative%20AI%20Policy.html"
+      topics: ["generative ai", "public ai", "sensitive data", "student records"]
+    - name: "Wesleyan Data Classification Policy"
+      url: "https://www.wesleyan.edu/its/policies/data-classification-policy.html"
+      topics: ["data classification", "restricted data", "confidential data", "student records", "ferpa"]
+    - name: "Wesleyan Technology Acceptable Use Policy"
+      url: "https://www.wesleyan.edu/its/policies/technology_aup.html"
+      topics: ["acceptable use", "technology", "data use", "external services"]
+    - name: "Wesleyan Record Retention Policy"
+      url: "https://www.wesleyan.edu/generalcounsel/2013%20Policies/Wesleyan%20University%20Document%20Retention%20Policy%20FINAL%20030617.pdf"
+      topics: ["records retention", "deletion", "litigation hold", "retention"]

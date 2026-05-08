@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { CheckCircle2 } from 'lucide-react'
 import Tabs from '../components/ui/Tabs'
 import Card from '../components/ui/Card'
@@ -82,7 +82,7 @@ function ConnectionTab() {
 function AboutTab() {
   return (
     <Card className="max-w-xl p-6">
-      <h3 className="text-sm font-semibold text-ink">UniSensoryAI</h3>
+      <h3 className="text-sm font-semibold text-ink">Intelidoc</h3>
       <p className="mt-1 text-sm text-ink-muted">
         Multi-modal AI agent system for document perception and understanding.
       </p>
@@ -150,7 +150,7 @@ function ApiKeysTab() {
               type="password"
               value={openaiKey}
               onChange={(e) => setOpenaiKey(e.target.value)}
-              placeholder={apiKeys.OPENAI_API_KEY ? '••••••••••••••••' : 'sk-...'}
+              placeholder={apiKeys.OPENAI_API_KEY ? 'â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢' : 'sk-...'}
               className="w-full rounded-lg border border-surface-border bg-surface-muted px-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
             />
           </div>
@@ -179,7 +179,7 @@ function ApiKeysTab() {
               type="password"
               value={googleKey}
               onChange={(e) => setGoogleKey(e.target.value)}
-              placeholder={apiKeys.GOOGLE_API_KEY ? '••••••••••••••••' : 'AIzaSy...'}
+              placeholder={apiKeys.GOOGLE_API_KEY ? 'â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢' : 'AIzaSy...'}
               className="w-full rounded-lg border border-surface-border bg-surface-muted px-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
             />
           </div>
@@ -197,13 +197,13 @@ function ApiKeysTab() {
 
 export default function Settings() {
   useEffect(() => {
-    document.title = 'Settings — UniSensoryAI'
+    document.title = 'Settings â€” Intelidoc'
   }, [])
 
   return (
     <div>
       <h1 className="text-2xl font-bold text-ink">Settings</h1>
-      <p className="mt-1 text-sm text-ink-muted">Configure your UniSensoryAI instance</p>
+      <p className="mt-1 text-sm text-ink-muted">Configure your Intelidoc instance</p>
 
       <Tabs
         className="mt-6"

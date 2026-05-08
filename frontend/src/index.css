@@ -140,3 +140,32 @@
   cursor: row-resize !important;
 }
 
+/* Split Viewer — vertical drag divider between original and parsed panes */
+.split-divider-handle {
+  width: 4px;
+  flex-shrink: 0;
+  background-color: transparent;
+  cursor: col-resize;
+  transition: background-color 0.15s ease;
+  position: relative;
+  z-index: 10;
+}
+.split-divider-handle:hover,
+.split-divider-handle.is-dragging {
+  background-color: rgba(99, 102, 241, 0.5);
+}
+
+/* Split Viewer panel shadow */
+.split-viewer-shadow {
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.3);
+}
+
+/* Animate split viewer sliding in from right */
+@keyframes slide-in-right {
+  from { transform: translateX(100%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+.animate-slide-in-right {
+  animation: slide-in-right 0.2s ease-out both;
+}
+

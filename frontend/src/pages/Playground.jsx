@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+﻿import { useEffect, useState, useCallback } from 'react'
 import PlaygroundPanel from '../components/playground/PlaygroundPanel'
 import PlaygroundResult from '../components/playground/PlaygroundResult'
 import Card from '../components/ui/Card'
@@ -20,7 +20,7 @@ export default function Playground() {
   useJobPolling(isTerminal ? null : activeJobId)
 
   useEffect(() => {
-    document.title = 'Playground — UniSensoryAI'
+    document.title = 'Playground â€” Intelidoc'
   }, [])
 
   const handleRun = useCallback(

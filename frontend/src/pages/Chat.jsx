@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { AlertCircle, X } from 'lucide-react'
 import { useChat } from '../hooks/useChat'
 import { useSettings } from '../context/SettingsContext'
@@ -25,7 +25,7 @@ export default function Chat() {
   } = useChat()
 
   useEffect(() => {
-    document.title = 'Chat — UniSensoryAI'
+    document.title = 'Chat â€” Intelidoc'
     loadConversations()
   }, [loadConversations])
 
@@ -41,7 +41,7 @@ export default function Chat() {
 
   return (
     <div className="flex h-[calc(100vh-4rem)] overflow-hidden">
-      {/* Left — Conversation Sidebar */}
+      {/* Left â€” Conversation Sidebar */}
       <ChatSidebar
         conversations={conversations}
         activeId={activeConversationId}
@@ -52,7 +52,7 @@ export default function Chat() {
         onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
       />
 
-      {/* Center — Chat Area */}
+      {/* Center â€” Chat Area */}
       <div className="flex flex-1 flex-col min-w-0">
         {/* Toolbar */}
         <ChatToolbar
@@ -98,7 +98,7 @@ export default function Chat() {
         />
       </div>
 
-      {/* Right — Document Grounding Panel */}
+      {/* Right â€” Document Grounding Panel */}
       <DocumentGroundingPanel
         selectedIds={selectedDocIds}
         setSelectedIds={setSelectedDocIds}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import ModelGrid from '../components/models/ModelGrid'
 import { AVAILABLE_MODELS } from '../api/models'
 
@@ -12,7 +12,7 @@ export default function Models() {
   const [filter, setFilter] = useState('all')
 
   useEffect(() => {
-    document.title = 'Models — UniSensoryAI'
+    document.title = 'Models â€” Intelidoc'
   }, [])
 
   const filtered =

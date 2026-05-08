@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   X,
   Minus,
@@ -16,11 +16,14 @@ import {
   Cpu,
   FileText,
   Layers,
+  Search,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import PolicyReviewPanel from './PolicyReviewPanel'
 
 const TABS = [
   { key: 'content', label: 'Content' },
+  { key: 'policy', label: 'Policy' },
   { key: 'metadata', label: 'Metadata' },
   { key: 'raw', label: 'Raw' },
 ]
@@ -152,6 +155,10 @@ export default function InspectorPane({
 }) {
   const [activeTab, setActiveTab] = useState('content')
   const navigate = useNavigate()
+
+  useEffect(() => {
+    setActiveTab('content')
+  }, [doc?.id, doc?.job_id])
 
   if (!isOpen || !doc) return null
 
@@ -293,6 +300,7 @@ export default function InspectorPane({
       {/* Tab Content */}
       <div className="flex-1 overflow-hidden">
         {activeTab === 'content' && <ContentTab doc={doc} />}
+        {activeTab === 'policy' && <PolicyReviewPanel doc={doc} />}
         {activeTab === 'metadata' && <MetadataTab doc={doc} />}
         {activeTab === 'raw' && <RawTab doc={doc} />}
       </div>
@@ -312,6 +320,17 @@ export default function InspectorPane({
         >
           <MessageSquare className="h-3.5 w-3.5" />
           Chat
+        </button>
+        <button
+          onClick={() => setActiveTab('policy')}
+          className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+            activeTab === 'policy'
+              ? 'bg-brand text-white hover:bg-brand/90'
+              : 'bg-surface-muted text-ink-muted hover:bg-surface-subtle hover:text-ink'
+          }`}
+        >
+          <Search className="h-3.5 w-3.5" />
+          Review
         </button>
       </div>
     </div>

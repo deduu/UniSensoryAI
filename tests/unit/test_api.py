@@ -32,9 +32,10 @@ for mod in _MOCK_MODULES:
     if mod not in sys.modules:
         sys.modules[mod] = MagicMock()
 
-from httpx import AsyncClient, ASGITransport
-from src.db.session import get_db
-from src.db.models.ingestion import IngestionStatus
+from httpx import AsyncClient, ASGITransport  # noqa: E402
+from src.db.session import get_db  # noqa: E402
+from src.db.models.ingestion import IngestionStatus  # noqa: E402
+from src.policy.models import PolicyReviewResult  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -57,7 +58,6 @@ def test_app(mock_lifespan):
     """Create a test FastAPI app with mocked lifespan and DB dependency override."""
     from src.api.server import app
     from src.api.auth import get_current_user
-    from src.api.rate_limit import RateLimitDep
 
     app.router.lifespan_context = mock_lifespan
 
@@ -219,6 +219,34 @@ async def test_process_document_upload_queue_error(test_app, tmp_path):
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
+async def test_preview_job_file_as_text_for_docx(test_app):
+    """Office source preview should return extracted text instead of forcing inline DOCX."""
+    mock_job = _make_mock_job(
+        job_id="job-docx",
+        file_path="/uploads/proposed-policy.docx",
+        meta={"original_filename": "proposed-policy.docx"},
+    )
+    mock_service = MagicMock()
+    mock_service.get_by_id = AsyncMock(return_value=mock_job)
+
+    with (
+        patch("src.api.server.IngestionService", return_value=mock_service),
+        patch("src.api.server.DocumentConverter.convert", return_value=["Full policy text"]),
+        patch("src.api.server.Path.exists", return_value=True),
+    ):
+        transport = ASGITransport(app=test_app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.get("/v1/jobs/job-docx/preview")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "filename": "proposed-policy.docx",
+        "content_type": "text/plain",
+        "content": "Full policy text",
+    }
+
+
+@pytest.mark.asyncio
 async def test_list_jobs_empty(test_app):
     """GET /v1/jobs should return empty list when no jobs exist."""
     mock_service = MagicMock()
@@ -280,8 +308,8 @@ async def test_list_jobs_invalid_limit(test_app):
 
 
 @pytest.mark.asyncio
-async def test_list_jobs_content_truncation(test_app):
-    """GET /v1/jobs should truncate content_text to 500 chars + '...'."""
+async def test_list_jobs_returns_full_content_text(test_app):
+    """GET /v1/jobs should return full content_text for document views."""
     long_text = "A" * 600
     doc = _make_mock_doc(content_text=long_text)
     job = _make_mock_job(documents=[doc])
@@ -295,8 +323,7 @@ async def test_list_jobs_content_truncation(test_app):
 
     data = response.json()
     content = data[0]["documents"][0]["content_text"]
-    assert len(content) == 503  # 500 + "..."
-    assert content.endswith("...")
+    assert content == long_text
 
 
 # ---------------------------------------------------------------------------
@@ -525,3 +552,94 @@ async def test_retry_pending_job(test_app):
             response = await client.post("/v1/jobs/pending-job/retry")
 
     assert response.status_code == 400
+
+
+# ---------------------------------------------------------------------------
+# POST /v1/jobs/{job_id}/policy-review — Parallel policy review
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_review_job_policy_success(test_app):
+    """POST /v1/jobs/{id}/policy-review should return orchestrated findings."""
+    mock_service = MagicMock()
+    mock_service.review_job = AsyncMock(
+        return_value=PolicyReviewResult(
+            job_id="policy-job",
+            document_id="doc-1",
+            filename="policy.pdf",
+            summary="No contradictions or interference risks were detected by the configured agents.",
+        )
+    )
+
+    with patch("src.api.server.PolicyReviewService", return_value=mock_service):
+        transport = ASGITransport(app=test_app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.post(
+                "/v1/jobs/policy-job/policy-review",
+                json={"include_database": True, "include_web_search": False},
+            )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["job_id"] == "policy-job"
+    assert data["document_id"] == "doc-1"
+    assert data["findings"] == []
+    mock_service.review_job.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_get_job_policy_review_returns_saved_result(test_app):
+    """GET /v1/jobs/{id}/policy-review should return a saved review result."""
+    mock_service = MagicMock()
+    mock_service.get_saved_review = AsyncMock(
+        return_value=PolicyReviewResult(
+            job_id="policy-job",
+            document_id="doc-1",
+            filename="policy.pdf",
+            summary="Saved policy review",
+        )
+    )
+
+    with patch("src.api.server.PolicyReviewService", return_value=mock_service):
+        transport = ASGITransport(app=test_app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.get("/v1/jobs/policy-job/policy-review")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["summary"] == "Saved policy review"
+    mock_service.get_saved_review.assert_called_once_with("policy-job")
+
+
+@pytest.mark.asyncio
+async def test_get_job_policy_review_returns_404_when_missing(test_app):
+    """GET /v1/jobs/{id}/policy-review should be 404 when no review has been saved."""
+    mock_service = MagicMock()
+    mock_service.get_saved_review = AsyncMock(return_value=None)
+
+    with patch("src.api.server.PolicyReviewService", return_value=mock_service):
+        transport = ASGITransport(app=test_app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.get("/v1/jobs/policy-job/policy-review")
+
+    assert response.status_code == 404
+    assert "No saved policy review" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_review_job_policy_rejects_unreviewable_job(test_app):
+    """POST /v1/jobs/{id}/policy-review should return 400 for non-completed jobs."""
+    mock_service = MagicMock()
+    mock_service.review_job = AsyncMock(side_effect=ValueError("Only completed jobs can be reviewed."))
+
+    with patch("src.api.server.PolicyReviewService", return_value=mock_service):
+        transport = ASGITransport(app=test_app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.post(
+                "/v1/jobs/pending-job/policy-review",
+                json={"include_database": True},
+            )
+
+    assert response.status_code == 400
+    assert "completed" in response.json()["detail"]

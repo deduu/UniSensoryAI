@@ -8,33 +8,57 @@ import {
   ArrowUp,
   ArrowDown,
   ArrowUpDown,
+  Eye,
+  MessageSquare,
+  Download,
+  Trash2,
 } from 'lucide-react'
 import Badge from '../ui/Badge'
 
+// ─── helpers ─────────────────────────────────────────────────────────────────
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i
+const IMAGE_EXTS = new Set(['png', 'jpg', 'jpeg', 'webp', 'gif'])
+const SHEET_EXTS = new Set(['xlsx', 'xls', 'csv'])
+const SLIDE_EXTS = new Set(['pptx', 'ppt'])
+
 const FILE_ICONS = {
-  pdf: FileText,
-  xlsx: FileSpreadsheet,
-  xls: FileSpreadsheet,
-  csv: FileSpreadsheet,
-  png: FileImage,
-  jpg: FileImage,
-  jpeg: FileImage,
-  webp: FileImage,
-  gif: FileImage,
-  pptx: Presentation,
-  ppt: Presentation,
+  pdf:  FileText,
+  xlsx: FileSpreadsheet, xls: FileSpreadsheet, csv: FileSpreadsheet,
+  png:  FileImage, jpg: FileImage, jpeg: FileImage, webp: FileImage, gif: FileImage,
+  pptx: Presentation, ppt: Presentation,
+}
+
+function getExt(filename) {
+  return filename?.split('.').pop()?.toLowerCase() || ''
 }
 
 function getFileIcon(filename) {
-  const ext = filename?.split('.').pop()?.toLowerCase() || ''
-  return FILE_ICONS[ext] || File
+  return FILE_ICONS[getExt(filename)] || File
+}
+
+function getTypeLabel(filename) {
+  const ext = getExt(filename)
+  if (ext === 'pdf')            return 'PDF'
+  if (SHEET_EXTS.has(ext))      return 'Spreadsheet'
+  if (SLIDE_EXTS.has(ext))      return 'Presentation'
+  if (IMAGE_EXTS.has(ext))      return 'Image'
+  if (['docx', 'doc'].includes(ext)) return 'Document'
+  return ext.toUpperCase() || '—'
+}
+
+function getFriendlyName(doc) {
+  const filename = doc.filename || ''
+  const bare = filename.replace(/\.[^/.]+$/, '')
+  if (!bare || UUID_RE.test(bare)) {
+    return IMAGE_EXTS.has(getExt(filename)) ? 'Image extraction' : 'Document'
+  }
+  return bare
 }
 
 function relativeTime(dateStr) {
   if (!dateStr) return '—'
-  const now = Date.now()
-  const d = new Date(dateStr).getTime()
-  const diff = now - d
+  const diff = Date.now() - new Date(dateStr).getTime()
   const mins = Math.floor(diff / 60000)
   if (mins < 1) return 'just now'
   if (mins < 60) return `${mins}m ago`
@@ -52,13 +76,56 @@ function formatSize(bytes) {
   return `${(bytes / 1048576).toFixed(1)} MB`
 }
 
+// ─── Sort columns ─────────────────────────────────────────────────────────────
+
 const COLUMNS = [
-  { key: 'filename', label: 'Name', sortable: true },
-  { key: 'job_status', label: 'Status', sortable: true },
-  { key: 'model_id', label: 'Model', sortable: true },
-  { key: 'created_at', label: 'Date', sortable: true },
-  { key: 'file_size', label: 'Size', sortable: true },
+  { key: 'filename',   label: 'Document', sortable: true },
+  { key: 'type',       label: 'Type',     sortable: false },
+  { key: 'job_status', label: 'Status',   sortable: true },
+  { key: 'model_id',   label: 'Model',    sortable: true },
+  { key: 'created_at', label: 'Date',     sortable: true },
+  { key: 'file_size',  label: 'Size',     sortable: true },
 ]
+
+// Which columns to hide when full SplitViewer is open (need space)
+const HIDE_WHEN_PANE = new Set(['model_id', 'created_at', 'file_size', 'type'])
+
+// ─── Row actions (hover-revealed) ─────────────────────────────────────────────
+
+function RowActions({ doc, onPreview, onChat, onDownload, onDelete }) {
+  return (
+    <div className="flex items-center justify-end gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+      <ActionBtn icon={Eye}            label="Preview"           onClick={() => onPreview(doc)}  />
+      <ActionBtn icon={MessageSquare}  label="Chat"              onClick={() => onChat(doc)}     className="text-brand/60 hover:text-brand hover:bg-brand/10" />
+      <ActionBtn icon={Download}       label="Download"          onClick={() => onDownload(doc)} />
+      <ActionBtn icon={Trash2}         label="Delete"            onClick={() => onDelete(doc)}   className="hover:text-red-400 hover:bg-red-400/10" />
+    </div>
+  )
+}
+
+function ActionBtn({ icon: Icon, label, onClick, className = '' }) {
+  return (
+    <button
+      aria-label={label}
+      title={label}
+      onClick={(e) => { e.stopPropagation(); onClick() }}
+      className={`rounded-md p-1.5 text-ink-faint transition-colors hover:bg-surface-subtle hover:text-ink ${className}`}
+    >
+      <Icon className="h-3.5 w-3.5" />
+    </button>
+  )
+}
+
+// ─── Sort icon ────────────────────────────────────────────────────────────────
+
+function SortIcon({ colKey, sortKey, sortDir }) {
+  if (sortKey !== colKey) return <ArrowUpDown className="h-3 w-3 opacity-20" />
+  return sortDir === 'asc'
+    ? <ArrowUp className="h-3 w-3" />
+    : <ArrowDown className="h-3 w-3" />
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
 
 export default function DocumentTable({
   documents,
@@ -67,18 +134,18 @@ export default function DocumentTable({
   onSelectDoc,
   onToggleSelect,
   onToggleSelectAll,
+  onPreview,
+  onChat,
+  onDownload,
+  onDelete,
   isPaneOpen,
 }) {
   const [sortKey, setSortKey] = useState(null)
   const [sortDir, setSortDir] = useState('asc')
 
   const handleSort = (key) => {
-    if (sortKey === key) {
-      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
-    } else {
-      setSortKey(key)
-      setSortDir('asc')
-    }
+    if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    else { setSortKey(key); setSortDir('asc') }
   }
 
   const sorted = [...documents].sort((a, b) => {
@@ -98,118 +165,158 @@ export default function DocumentTable({
   return (
     <div className="overflow-hidden rounded-xl border border-surface-border flex flex-col h-full">
       <div className="flex-1 overflow-auto">
-        <table className="w-full text-left text-sm table-fixed min-w-[500px]">
+        <table className="w-full text-left text-sm table-fixed min-w-[480px]">
           <thead>
-          <tr className="border-b border-surface-border bg-surface-muted/60">
-            <th className="w-10 px-3 py-3">
-              <input
-                type="checkbox"
-                checked={allSelected}
-                onChange={onToggleSelectAll}
-                className="h-3.5 w-3.5 rounded border-surface-border bg-surface-muted text-brand focus:ring-brand/30 focus:ring-offset-0"
-              />
-            </th>
-            {COLUMNS.map((col) => {
-              const hideWhenPaneOpen = ['model_id', 'created_at', 'file_size'].includes(col.key);
-              if (isPaneOpen && hideWhenPaneOpen) return null;
-              
-              // Set column widths
-              let colWidth = '';
-              if (col.key === 'filename') colWidth = 'w-auto';
-              else if (col.key === 'job_status') colWidth = 'w-28';
-              else if (col.key === 'model_id') colWidth = 'w-32 hidden md:table-cell';
-              else if (col.key === 'created_at') colWidth = 'w-32';
-              else if (col.key === 'file_size') colWidth = 'w-24 hidden lg:table-cell';
+            <tr className="border-b border-surface-border bg-surface-muted/60">
+              {/* Checkbox */}
+              <th className="w-9 px-3 py-2.5">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={onToggleSelectAll}
+                  aria-label="Select all"
+                  className="h-3.5 w-3.5 rounded border-surface-border bg-surface-muted text-brand focus:ring-brand/30 focus:ring-offset-0"
+                />
+              </th>
+
+              {COLUMNS.map((col) => {
+                if (isPaneOpen && HIDE_WHEN_PANE.has(col.key)) return null
+
+                const widthClass =
+                  col.key === 'filename'   ? 'w-auto' :
+                  col.key === 'type'       ? 'w-24 hidden sm:table-cell' :
+                  col.key === 'job_status' ? 'w-28' :
+                  col.key === 'model_id'   ? 'w-32 hidden md:table-cell' :
+                  col.key === 'created_at' ? 'w-28' :
+                  col.key === 'file_size'  ? 'w-20 hidden lg:table-cell' :
+                  ''
+
+                return (
+                  <th
+                    key={col.key}
+                    onClick={col.sortable ? () => handleSort(col.key) : undefined}
+                    className={`px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-ink-faint ${
+                      col.sortable ? 'cursor-pointer select-none hover:text-ink-muted' : ''
+                    } ${widthClass}`}
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      {col.label}
+                      {col.sortable && (
+                        <SortIcon colKey={col.key} sortKey={sortKey} sortDir={sortDir} />
+                      )}
+                    </span>
+                  </th>
+                )
+              })}
+
+              {/* Actions column header */}
+              <th className="w-28 px-3 py-2.5" aria-label="Actions" />
+            </tr>
+          </thead>
+
+          <tbody className="divide-y divide-surface-border">
+            {sorted.map((doc) => {
+              const docId   = doc.id ?? doc.job_id
+              const isActive   = docId === activeDocId
+              const isSelected = selectedIds.has(docId)
+              const Icon       = getFileIcon(doc.filename)
+              const friendlyName = getFriendlyName(doc)
+              const shortId = (doc.id || doc.job_id || '').slice(0, 16)
 
               return (
-              <th
-                key={col.key}
-                onClick={col.sortable ? () => handleSort(col.key) : undefined}
-                className={`px-4 py-3 text-xs font-semibold uppercase tracking-wider text-ink-muted ${
-                  col.sortable ? 'cursor-pointer select-none hover:text-ink' : ''
-                } ${colWidth}`}
-              >
-                <span className="inline-flex items-center gap-1">
-                  {col.label}
-                  {col.sortable &&
-                    (sortKey === col.key ? (
-                      sortDir === 'asc' ? (
-                        <ArrowUp className="h-3 w-3" />
-                      ) : (
-                        <ArrowDown className="h-3 w-3" />
-                      )
-                    ) : (
-                      <ArrowUpDown className="h-3 w-3 opacity-30" />
-                    ))}
-                </span>
-              </th>
-            )})}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-surface-border">
-          {sorted.map((doc) => {
-            const docId = doc.id ?? doc.job_id
-            const isActive = docId === activeDocId
-            const isSelected = selectedIds.has(docId)
-            const Icon = getFileIcon(doc.filename)
+                <tr
+                  key={docId}
+                  onClick={() => onSelectDoc(doc)}
+                  className={`group doc-table-row cursor-pointer ${isActive ? 'is-active' : ''} ${isSelected ? 'is-selected' : ''}`}
+                >
+                  {/* Checkbox */}
+                  <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => onToggleSelect(docId)}
+                      aria-label={`Select ${friendlyName}`}
+                      className="h-3.5 w-3.5 rounded border-surface-border bg-surface-muted text-brand focus:ring-brand/30 focus:ring-offset-0"
+                    />
+                  </td>
 
-            return (
-              <tr
-                key={docId}
-                onClick={() => onSelectDoc(doc)}
-                className={`doc-table-row cursor-pointer ${isActive ? 'is-active' : ''} ${
-                  isSelected ? 'is-selected' : ''
-                }`}
-              >
-                <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
-                  <input
-                    type="checkbox"
-                    checked={isSelected}
-                    onChange={() => onToggleSelect(docId)}
-                    className="h-3.5 w-3.5 rounded border-surface-border bg-surface-muted text-brand focus:ring-brand/30 focus:ring-offset-0"
-                  />
-                </td>
-                <td className="px-4 py-2.5 min-w-0">
-                  <div className="flex items-center gap-2.5">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-light">
-                      <Icon className="h-4 w-4 text-brand" />
+                  {/* Document name */}
+                  <td className="px-4 py-2.5 min-w-0">
+                    <div className="flex items-center gap-2.5">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-light">
+                        <Icon className="h-4 w-4 text-brand" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-ink leading-tight">
+                          {friendlyName}
+                        </p>
+                        {shortId && (
+                          <p className="text-[10px] text-ink-faint font-mono truncate leading-tight mt-0.5">
+                            {shortId}…
+                          </p>
+                        )}
+                      </div>
                     </div>
-                    <span className="truncate font-medium text-ink block w-full">
-                      {doc.filename || 'Untitled'}
-                    </span>
-                  </div>
-                </td>
-                <td className="px-4 py-2.5 w-28">
-                  <Badge variant={doc.job_status} dot>
-                    {doc.job_status}
-                  </Badge>
-                </td>
-                {(!isPaneOpen) && (
-                  <td className="px-4 py-2.5 text-ink-muted w-32 hidden md:table-cell">
-                    <span className="rounded bg-surface-subtle px-2 py-0.5 text-xs font-mono truncate max-w-full block">
-                      {doc.model_id || '—'}
-                    </span>
                   </td>
-                )}
-                {(!isPaneOpen) && (
-                  <td className="px-4 py-2.5 text-xs text-ink-muted w-32 truncate">
-                    {relativeTime(doc.created_at)}
+
+                  {/* Type */}
+                  {(!isPaneOpen) && (
+                    <td className="px-4 py-2.5 text-xs text-ink-faint hidden sm:table-cell">
+                      {getTypeLabel(doc.filename)}
+                    </td>
+                  )}
+
+                  {/* Status */}
+                  <td className="px-4 py-2.5">
+                    <Badge variant={doc.job_status} dot>
+                      {doc.job_status}
+                    </Badge>
                   </td>
-                )}
-                {(!isPaneOpen) && (
-                  <td className="px-4 py-2.5 text-xs text-ink-muted w-24 hidden lg:table-cell">
-                    {formatSize(doc.file_size)}
+
+                  {/* Model */}
+                  {(!isPaneOpen) && (
+                    <td className="px-4 py-2.5 hidden md:table-cell">
+                      <span className="rounded-md bg-surface-muted border border-surface-border px-2 py-0.5 text-[11px] font-mono text-ink-muted truncate max-w-full inline-block">
+                        {doc.model_id || '—'}
+                      </span>
+                    </td>
+                  )}
+
+                  {/* Date */}
+                  {(!isPaneOpen) && (
+                    <td className="px-4 py-2.5 text-xs text-ink-faint whitespace-nowrap">
+                      {relativeTime(doc.created_at)}
+                    </td>
+                  )}
+
+                  {/* Size */}
+                  {(!isPaneOpen) && (
+                    <td className="px-4 py-2.5 text-xs text-ink-faint hidden lg:table-cell">
+                      {formatSize(doc.file_size)}
+                    </td>
+                  )}
+
+                  {/* Actions */}
+                  <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+                    <RowActions
+                      doc={doc}
+                      onPreview={onPreview}
+                      onChat={onChat}
+                      onDownload={onDownload}
+                      onDelete={onDelete}
+                    />
                   </td>
-                )}
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
       </div>
+
+      {/* No results within current filter */}
       {documents.length === 0 && (
-        <div className="py-12 text-center text-sm text-ink-muted border-t border-surface-border">
-          No documents match your filters
+        <div className="py-10 text-center text-sm text-ink-faint border-t border-surface-border">
+          No documents match your filters.
         </div>
       )}
     </div>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import Tabs from '../components/ui/Tabs'
 import DropZone from '../components/upload/DropZone'
 import FilePreview from '../components/upload/FilePreview'
@@ -123,7 +123,7 @@ function JobsTab() {
 
 export default function Parse() {
   useEffect(() => {
-    document.title = 'Parse — UniSensoryAI'
+    document.title = 'Parse â€” Intelidoc'
   }, [])
 
   return (

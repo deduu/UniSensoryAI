@@ -68,21 +68,16 @@ class InferenceStage(BasePipelineStage):
             logger.info("Inference: processing item %d/%d", i + 1, len(content_items))
 
             if isinstance(item, str):
-                # Text path (Office files)
-                analysis_prompt = (
-                    "Analyze the following document content and extract "
-                    f"key information:\n\n{item}"
-                )
-                page_result = await loop.run_in_executor(
-                    None,
-                    lambda p=analysis_prompt: model.process(prompt=p, image=None),
-                )
-                results.append(page_result.get("content", ""))
+                # Office converters already return extracted source text. Keep it intact
+                # instead of asking the model for a lossy summary.
+                results.append(item)
 
             elif isinstance(item, Image.Image):
                 # Image path (PDF/images)
                 prompt = (
-                    "Analyze this page/image and extract the whole content in detail."
+                    "Transcribe every word, number, heading, table cell, label, and footnote "
+                    "visible on this page exactly as written. Do not summarize, paraphrase, "
+                    "interpret, or omit any content. Output the raw text only."
                 )
                 img_byte_arr = io.BytesIO()
                 item.save(img_byte_arr, format="PNG")

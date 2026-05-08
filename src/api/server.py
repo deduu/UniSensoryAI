@@ -1,27 +1,28 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form, Depends, Query, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
 from src.api.validators import UploadValidator
 from src.api.auth import get_current_user
 from src.api.rate_limit import RateLimitDep
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional
 import shutil
 import os
 import uuid
 from contextlib import asynccontextmanager
 
-from src.utils.config import ConfigLoader
-from src.models import ModelLoader
-from src.core.document import Document, DocumentType
-
 # DB and Queuing imports
-from src.db.session import init_db, get_db, session_manager
+from src.db.session import init_db, get_db
 from src.ingestion import init_ingestion_queue, get_ingestion_queue
+from src.ingestion.converter import DocumentConverter
 from src.ingestion.processor import process_document_job
 from src.services.ingestion import IngestionService
 from src.db.models.ingestion import IngestionStatus
+from src.services.chat import ChatService
+from src.services.exceptions import NotFoundException
+from src.policy.models import PolicyReviewRequest
+from src.policy.service import PolicyReviewService
 
 # Setup structured logging
 from src.utils.logging import configure_logging, get_logger
@@ -36,6 +37,37 @@ logger = get_logger("api")
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://postgres:postgres@localhost:5433/unisensory")
 UPLOAD_DIR = Path("data/uploads")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _truncate_content(content: str | None, *, limit: int = 500) -> str | None:
+    if content is None or len(content) <= limit:
+        return content
+    return f"{content[:limit]}..."
+
+
+def _policy_review_from_chunks(chunks: list[dict] | None) -> dict | None:
+    if not isinstance(chunks, list):
+        return None
+    for chunk in reversed(chunks):
+        if not isinstance(chunk, dict):
+            continue
+        if chunk.get("type") == "policy_review_result":
+            return chunk.get("result")
+    return None
+
+
+def _serialize_document(doc, *, truncate: bool = False) -> dict:
+    content_text = _truncate_content(doc.content_text) if truncate else doc.content_text
+    content_chunks = getattr(doc, "content_chunks", None)
+    if not isinstance(content_chunks, list):
+        content_chunks = None
+    return {
+        "id": doc.id,
+        "filename": doc.filename,
+        "content_text": content_text,
+        "content_chunks": content_chunks,
+        "policy_review": _policy_review_from_chunks(content_chunks),
+    }
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -163,11 +195,7 @@ async def list_jobs(
                 "file_path": job.file_path,
                 "meta": job.meta,
                 "documents": [
-                    {
-                        "id": doc.id,
-                        "filename": doc.filename,
-                        "content_text": doc.content_text[:500] + "..." if doc.content_text else None,
-                    }
+                    _serialize_document(doc, truncate=True)
                     for doc in job.documents
                 ],
             }
@@ -195,11 +223,7 @@ async def get_job_status(job_id: str, db=Depends(get_db)):
             "file_path": job.file_path,
             "meta": job.meta,
             "documents": [
-                {
-                    "id": doc.id,
-                    "filename": doc.filename,
-                    "content_text": doc.content_text,
-                }
+                _serialize_document(doc)
                 for doc in job.documents
             ],
         }
@@ -282,9 +306,98 @@ async def retry_job(job_id: str, db=Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/v1/jobs/{job_id}/file")
+async def serve_job_file(job_id: str, db=Depends(get_db)):
+    """Serve the original uploaded file for a job."""
+    service = IngestionService(db)
+    try:
+        job = await service.get_by_id(job_id, raise_not_found=False)
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found")
+
+        file_path = Path(job.file_path)
+        if not file_path.exists():
+            raise HTTPException(status_code=404, detail="File not found on disk")
+
+        original_filename = job.meta.get("original_filename", file_path.name) if job.meta else file_path.name
+        # No `filename` arg — avoids Content-Disposition: attachment so browsers render inline
+        response = FileResponse(path=str(file_path))
+        response.headers["Content-Disposition"] = f'inline; filename="{original_filename}"'
+        return response
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error serving file for job {job_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ---------------------------------------------------------------------------
 # SSE — Real-time job status stream
 # ---------------------------------------------------------------------------
+
+@app.get("/v1/jobs/{job_id}/preview")
+async def preview_job_file(job_id: str, db=Depends(get_db)):
+    """Return text preview content for Office source files."""
+    service = IngestionService(db)
+    try:
+        job = await service.get_by_id(job_id, raise_not_found=False)
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found")
+
+        file_path = Path(job.file_path)
+        if not file_path.exists():
+            raise HTTPException(status_code=404, detail="File not found on disk")
+
+        ext = file_path.suffix.lower()
+        if ext not in {".docx", ".pptx", ".xlsx"}:
+            raise HTTPException(
+                status_code=400,
+                detail="Preview text is only available for Office files",
+            )
+
+        content_items = DocumentConverter.convert(file_path)
+        original_filename = job.meta.get("original_filename", file_path.name) if job.meta else file_path.name
+        return JSONResponse(
+            content={
+                "filename": original_filename,
+                "content_type": "text/plain",
+                "content": "\n\n".join(str(item) for item in content_items),
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error previewing file for job {job_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/v1/jobs/{job_id}/preview/html", response_class=None)
+async def preview_job_file_html(job_id: str, db=Depends(get_db)):
+    """Return an HTML document for browser-native Office file preview (DOCX, XLSX, PPTX)."""
+    from fastapi.responses import HTMLResponse
+
+    service = IngestionService(db)
+    try:
+        job = await service.get_by_id(job_id, raise_not_found=False)
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found")
+
+        file_path = Path(job.file_path)
+        if not file_path.exists():
+            raise HTTPException(status_code=404, detail="File not found on disk")
+
+        ext = file_path.suffix.lower()
+        if ext not in {".docx", ".pptx", ".xlsx"}:
+            raise HTTPException(status_code=400, detail="HTML preview only available for Office files")
+
+        html = DocumentConverter.to_html(file_path)
+        return HTMLResponse(content=html)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error generating HTML preview for job {job_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/v1/jobs/{job_id}/stream")
 async def stream_job_status(
@@ -308,9 +421,6 @@ async def stream_job_status(
 # ---------------------------------------------------------------------------
 # Chat — Conversation & Message CRUD
 # ---------------------------------------------------------------------------
-
-from src.services.chat import ChatService
-
 
 @app.post("/v1/chat/conversations")
 async def create_conversation(request: Request, db=Depends(get_db)):
@@ -485,6 +595,51 @@ async def add_message(conversation_id: str, request: Request, db=Depends(get_db)
         raise
     except Exception as e:
         logger.error(f"Error adding message: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ---------------------------------------------------------------------------
+# Policy Review — parallel post-ingestion analysis
+# ---------------------------------------------------------------------------
+
+
+@app.get("/v1/jobs/{job_id}/policy-review")
+async def get_job_policy_review(job_id: str, db=Depends(get_db)):
+    """Return the latest persisted policy review result for a completed job."""
+    service = PolicyReviewService(db)
+    try:
+        result = await service.get_saved_review(job_id)
+        if result is None:
+            raise HTTPException(status_code=404, detail="No saved policy review for this job")
+        return JSONResponse(content=result.model_dump())
+    except HTTPException:
+        raise
+    except NotFoundException:
+        raise HTTPException(status_code=404, detail="Job not found")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error loading policy review for job {job_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/v1/jobs/{job_id}/policy-review")
+async def review_job_policy(
+    job_id: str,
+    review_request: PolicyReviewRequest,
+    db=Depends(get_db),
+):
+    """Run parallel policy review agents against a completed parsed document."""
+    service = PolicyReviewService(db)
+    try:
+        result = await service.review_job(job_id, review_request)
+        return JSONResponse(content=result.model_dump())
+    except NotFoundException:
+        raise HTTPException(status_code=404, detail="Job not found")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error reviewing policy for job {job_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 

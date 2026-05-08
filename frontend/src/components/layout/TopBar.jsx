@@ -1,4 +1,4 @@
-import { useLocation, Link } from 'react-router-dom'
+﻿import { useLocation, Link } from 'react-router-dom'
 import { ChevronRight } from 'lucide-react'
 
 const PAGE_TITLES = {
@@ -13,7 +13,7 @@ const PAGE_TITLES = {
 
 export default function TopBar() {
   const { pathname } = useLocation()
-  const title = PAGE_TITLES[pathname] || 'UniSensoryAI'
+  const title = PAGE_TITLES[pathname] || 'Intelidoc'
 
   return (
     <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-surface-border/50 bg-surface/30 px-8 backdrop-blur-xl">

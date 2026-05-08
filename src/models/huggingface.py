@@ -256,7 +256,7 @@ class HuggingFaceBaseModel(BaseVisionLanguageModel, ABC):
     def _extract_generation_kwargs(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:
         """Extract and validate generation parameters."""
         return {
-            "max_new_tokens": kwargs.get("max_new_tokens", 128),
+            "max_new_tokens": kwargs.get("max_new_tokens", self.config.get("config", {}).get("max_new_tokens", 4096)),
             "temperature": kwargs.get("temperature", 0.7),
             "top_p": kwargs.get("top_p", 0.9),
             "do_sample": kwargs.get("do_sample", True),

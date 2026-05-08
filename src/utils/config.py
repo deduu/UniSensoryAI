@@ -204,6 +204,13 @@ class ConfigLoader:
             )
         
         return pipelines_config["pipelines"][pipeline_name]
+
+    @staticmethod
+    def get_policy_config(config_dir: Optional[Path] = None) -> Dict[str, Any]:
+        """Load policy review configuration."""
+        if config_dir is None:
+            config_dir = ConfigLoader.DEFAULT_CONFIG_DIR
+        return ConfigLoader.load_yaml(config_dir / "policy.yaml")
     
     @staticmethod
     def list_available_models(config_dir: Optional[Path] = None) -> list[str]:

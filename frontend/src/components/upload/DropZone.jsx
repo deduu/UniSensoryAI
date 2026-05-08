@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from 'react'
-import { Upload } from 'lucide-react'
+import { Upload, Paperclip } from 'lucide-react'
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50 MB
 
@@ -16,7 +16,7 @@ function validateFiles(fileList) {
   return { valid, rejected }
 }
 
-export default function DropZone({ onFiles, accept, className = '' }) {
+export default function DropZone({ onFiles, accept, compact = false, className = '' }) {
   const [dragOver, setDragOver] = useState(false)
   const [sizeError, setSizeError] = useState(null)
   const inputRef = useRef(null)
@@ -53,16 +53,45 @@ export default function DropZone({ onFiles, accept, className = '' }) {
     [processFiles]
   )
 
+  const sharedInput = (
+    <input
+      ref={inputRef}
+      type="file"
+      multiple
+      accept={accept || '.pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg,.webp'}
+      onChange={handleChange}
+      className="hidden"
+    />
+  )
+
+  const dragHandlers = {
+    onDragOver: (e) => { e.preventDefault(); setDragOver(true) },
+    onDragLeave: () => setDragOver(false),
+    onDrop: handleDrop,
+    onClick: () => inputRef.current?.click(),
+  }
+
+  if (compact) {
+    return (
+      <div
+        {...dragHandlers}
+        className={`inline-flex cursor-pointer items-center gap-2 rounded-lg border border-dashed px-3 py-1.5 text-xs transition-colors ${
+          dragOver
+            ? 'border-brand bg-brand/5 text-brand'
+            : 'border-surface-border text-ink-muted hover:border-brand/50 hover:text-ink'
+        } ${className}`}
+      >
+        <Paperclip className="h-3.5 w-3.5 shrink-0" />
+        <span>Drop or browse</span>
+        {sharedInput}
+      </div>
+    )
+  }
+
   return (
     <div>
       <div
-        onDragOver={(e) => {
-          e.preventDefault()
-          setDragOver(true)
-        }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={handleDrop}
-        onClick={() => inputRef.current?.click()}
+        {...dragHandlers}
         className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-12 text-center transition-colors ${
           dragOver
             ? 'border-brand bg-brand-light/30'
@@ -76,14 +105,7 @@ export default function DropZone({ onFiles, accept, className = '' }) {
         <p className="mt-1 text-xs text-ink-muted">
           PDF, DOCX, XLSX, PPTX, PNG, JPG up to 50 MB
         </p>
-        <input
-          ref={inputRef}
-          type="file"
-          multiple
-          accept={accept || '.pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg,.webp'}
-          onChange={handleChange}
-          className="hidden"
-        />
+        {sharedInput}
       </div>
       {sizeError && (
         <p className="mt-2 text-sm text-red-600">{sizeError}</p>

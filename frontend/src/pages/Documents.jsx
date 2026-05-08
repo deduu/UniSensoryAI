@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback } from 'react'
+﻿import { useEffect, useState, useMemo, useCallback } from 'react'
 import { FileText, Search } from 'lucide-react'
 import DocumentTable from '../components/documents/DocumentTable'
 import InspectorPane from '../components/documents/InspectorPane'
@@ -36,7 +36,7 @@ export default function Documents() {
   const pane = useResizablePane()
 
   useEffect(() => {
-    document.title = 'Documents — UniSensoryAI'
+    document.title = 'Documents â€” Intelidoc'
   }, [])
 
 

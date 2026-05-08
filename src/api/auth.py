@@ -13,7 +13,7 @@ Usage::
         ...
 
 Environment variables:
-    AUTH_ENABLED: Set to "false" to disable auth (default: "true").
+    AUTH_ENABLED: Set to "true" to require auth (default: "false").
     JWT_SECRET_KEY: Secret key for signing tokens.
     JWT_ALGORITHM: Algorithm (default: "HS256").
     JWT_EXPIRATION_MINUTES: Token expiration in minutes (default: 60).
@@ -26,8 +26,11 @@ from typing import Any, Dict, Optional
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
+
+load_dotenv()
 
 # Security scheme
 _security = HTTPBearer(auto_error=False)
@@ -39,7 +42,7 @@ class AuthConfig:
     @staticmethod
     def is_enabled() -> bool:
         """Check if authentication is enabled."""
-        return os.getenv("AUTH_ENABLED", "true").lower() != "false"
+        return os.getenv("AUTH_ENABLED", "false").lower() == "true"
 
     @staticmethod
     def get_secret_key() -> str:
