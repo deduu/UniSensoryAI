@@ -80,3 +80,16 @@
 - Preview UX: the original pane no longer wraps embedded previews in a second vertical scroller, and the preview has zoom controls for PDF, Office HTML, and images.
 - Highlighting: uploaded-document clauses from policy findings are highlighted in Office HTML previews; PDF previews open with a search fragment for the first contradiction clause.
 - Verification: `uv run pytest -q tests/unit/test_policy_service.py tests/unit/test_api.py` and `npm.cmd run build` passed.
+
+## Full Markdown Extraction Results
+- [x] Confirm the 503-character cap was coming from the jobs list serializer.
+- [x] Update jobs list responses to return full extracted content.
+- [x] Convert Office extracted text into Markdown-style structure.
+- [x] Update image/PDF inference prompt to request faithful Markdown extraction.
+- [x] Run targeted backend tests.
+- [x] Run frontend build.
+
+### Review
+- Root cause: `GET /v1/jobs` still used a 500-character preview serializer, so dashboard-loaded documents could carry truncated extracted content.
+- Result: job list and job detail payloads now expose full `content_text`; DOCX/XLSX/PPTX extraction preserves structure with Markdown headings/tables, and visual extraction prompts request faithful Markdown rather than summary text.
+- Verification: `uv run pytest -q tests/unit/test_document_converter.py tests/unit/test_pipeline_stages.py`, `uv run pytest -q tests/unit/test_api.py`, and `npm.cmd run build` passed.

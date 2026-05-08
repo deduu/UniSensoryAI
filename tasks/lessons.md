@@ -49,3 +49,10 @@ Run model enrichment as a separate field or workflow when summaries/insights are
 user navigated away because no durable field stored the review output.
 **Rule:** Any user-triggered analysis that appears as a reusable document result must be persisted
 before returning the API response, and job/document serializers must expose that saved result.
+
+### Do not reuse preview serializers for document result state
+**Date:** 2026-05-08
+**Context:** `GET /v1/jobs` truncated `content_text` to 500 characters for list previews, but the
+frontend reused that job payload as the source of truth for extracted document content.
+**Rule:** Keep previews in dedicated fields or UI-only derivations. API fields named like persisted
+results (`content_text`) must carry the full durable value.
