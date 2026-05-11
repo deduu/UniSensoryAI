@@ -16,7 +16,7 @@ export default function Chat() {
 
   const {
     conversations, activeConversationId, messages, isStreaming,
-    streamingContent, streamingThinking, error,
+    streamingContent, streamingThinking, streamingCitations, error,
     modelId, setModelId, thinkingEnabled, setThinkingEnabled,
     streamingEnabled, setStreamingEnabled, temperature, setTemperature,
     selectedDocIds, setSelectedDocIds,
@@ -83,6 +83,7 @@ export default function Chat() {
           messages={messages}
           streamingContent={streamingContent}
           streamingThinking={streamingThinking}
+          streamingCitations={streamingCitations}
           isStreaming={isStreaming}
           onSuggestedPrompt={handleSuggestedPrompt}
         />

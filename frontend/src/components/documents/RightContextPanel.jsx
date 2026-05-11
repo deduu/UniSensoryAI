@@ -1,7 +1,6 @@
 import { useState } from 'react'
-import { Eye, MessageSquare, Download, Trash2, Loader2, Upload, Plus } from 'lucide-react'
+import { Eye, MessageSquare, Download, Trash2, Loader2, Plus, X as XIcon, Sparkles } from 'lucide-react'
 import Badge from '../ui/Badge'
-import DropZone from '../upload/DropZone'
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -41,29 +40,34 @@ function relativeTime(dateStr) {
   return new Date(dateStr).toLocaleDateString()
 }
 
-// ─── Upload Panel ────────────────────────────────────────────────────────────
+// ─── Tips Panel (default right-panel content) ─────────────────────────────────
 
-function UploadPanel({ onFiles }) {
+// Single upload entry point lives in the top extraction bar. This panel just
+// reinforces the workflow so the right column isn't empty.
+function TipsPanel() {
   return (
     <div className="flex flex-col h-full">
       <div className="shrink-0 px-4 py-3.5 border-b border-surface-border">
-        <p className="text-sm font-semibold text-ink">Upload documents</p>
-        <p className="text-xs text-ink-muted mt-0.5">Drag files or browse to add</p>
+        <p className="text-sm font-semibold text-ink">Ready when you are</p>
+        <p className="text-xs text-ink-muted mt-0.5">Drop files into the top bar to begin</p>
       </div>
 
       <div className="flex-1 flex flex-col justify-center gap-4 p-4">
-        <DropZone onFiles={onFiles} />
-
-        <div className="text-center space-y-0.5">
-          <p className="text-xs text-ink-faint">PDF, DOCX, XLSX, PPTX, PNG, JPG</p>
-          <p className="text-xs text-ink-faint">Maximum 50 MB per file</p>
+        <div className="flex flex-col items-center text-center gap-2">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand/10 border border-brand/20">
+            <Sparkles className="h-6 w-6 text-brand" />
+          </div>
+          <p className="text-sm font-medium text-ink">No active work</p>
+          <p className="text-xs text-ink-faint max-w-[220px]">
+            Add documents above, pick a model, and click{' '}
+            <span className="font-semibold text-brand">Extract documents</span>.
+          </p>
         </div>
 
-        <div className="rounded-xl bg-brand/5 border border-brand/15 p-3">
-          <p className="text-xs text-brand/70 leading-relaxed">
-            After upload, choose a model and click{' '}
-            <span className="font-semibold text-brand">Extract documents</span> to process.
-          </p>
+        <div className="rounded-xl border border-surface-border bg-surface-muted/40 p-3 space-y-1">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-ink-faint">Supported</p>
+          <p className="text-xs text-ink-muted">PDF, DOCX, XLSX, PPTX, PNG, JPG</p>
+          <p className="text-[11px] text-ink-faint">Up to 50 MB per file</p>
         </div>
       </div>
     </div>
@@ -211,109 +215,151 @@ function DocumentPreviewPanel({
   )
 }
 
-// ─── Extraction Progress Panel ────────────────────────────────────────────────
+// ─── Activity Panel (unified upload + processing) ─────────────────────────────
 
-function ExtractionProgressPanel({ files, modelName, state, STATES }) {
-  const isUploading = state === STATES.UPLOADING
-  const isSubmitted = state === STATES.SUBMITTED
-  const isDone = state === STATES.DONE
-  const isError = state === STATES.ERROR
+function relativeElapsed(dateStr) {
+  if (!dateStr) return null
+  const secs = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000)
+  if (secs < 60) return `${secs}s`
+  const mins = Math.floor(secs / 60)
+  if (mins < 60) return `${mins}m`
+  const hours = Math.floor(mins / 60)
+  return `${hours}h`
+}
 
-  const currentFile = files?.[0]?.name || 'document'
+function ActivityRow({ row, onCancel }) {
+  const { kind, label, filename, error } = row
+  const isUploading = kind === 'uploading'
+  const isError = kind === 'error'
+  const isFailed = kind === 'failed'
+  const isRed = isError || isFailed
 
-  const statusText = isUploading
-    ? 'Uploading file…'
-    : isSubmitted
-      ? 'Processing with AI model…'
-      : isDone
-        ? 'Extraction complete'
-        : 'Extraction failed'
+  // Border + icon vary by state but layout stays consistent so the list reads
+  // as a single timeline rather than a state-machine takeover.
+  const borderClass = isRed
+    ? 'border-red-400/30 bg-red-400/5'
+    : 'border-surface-border bg-surface-muted/40'
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="shrink-0 px-4 py-3.5 border-b border-surface-border">
-        <p className="text-sm font-semibold text-ink">
-          {isDone ? 'Extraction complete' : isError ? 'Extraction failed' : 'Extracting document…'}
+    <div className={`flex items-center gap-3 rounded-xl border px-3 py-3 ${borderClass}`}>
+      {isRed ? (
+        <XIcon className="h-4 w-4 shrink-0 text-red-400" />
+      ) : (
+        <Loader2 className="h-4 w-4 shrink-0 text-amber-400 animate-spin" />
+      )}
+      <div className="min-w-0 flex-1">
+        <p className="text-xs font-medium text-ink truncate" title={filename}>
+          {filename}
         </p>
-        {modelName && <p className="text-xs text-ink-muted mt-0.5">{modelName}</p>}
-      </div>
-
-      <div className="flex-1 flex flex-col items-center justify-center gap-5 p-6">
-        {/* Status icon */}
-        <div
-          className={`flex h-16 w-16 items-center justify-center rounded-2xl ${
-            isDone
-              ? 'bg-emerald-400/10 border border-emerald-400/20'
-              : isError
-                ? 'bg-red-400/10 border border-red-400/20'
-                : 'bg-amber-400/10 border border-amber-400/20'
-          }`}
-        >
-          {isDone ? (
-            <Upload className="h-7 w-7 text-emerald-400" />
-          ) : isError ? (
-            <Upload className="h-7 w-7 text-red-400" />
-          ) : (
-            <Loader2 className="h-7 w-7 text-amber-300 animate-spin" />
+        <p className="text-[11px] text-ink-faint mt-0.5">
+          {label}
+          {row.elapsed && !isUploading && (
+            <span className="ml-1.5 text-ink-faint/70">· {row.elapsed}</span>
           )}
-        </div>
-
-        {/* File name */}
-        <div className="text-center max-w-full px-2">
-          <p className="text-sm font-medium text-ink truncate" title={currentFile}>
-            {currentFile}
+        </p>
+        {isRed && error && (
+          <p className="text-[11px] text-red-400/80 mt-0.5 truncate" title={error}>
+            {error}
           </p>
-          <p className="text-xs text-ink-faint mt-1">{statusText}</p>
-        </div>
-
-        {/* Progress bar */}
-        {(isUploading || isSubmitted) && (
-          <div className="w-full max-w-[160px]">
-            <div className="h-1 bg-surface-muted rounded-full overflow-hidden">
-              <div
-                className="h-full bg-amber-400 rounded-full transition-all duration-700"
-                style={{ width: isSubmitted ? '75%' : '35%' }}
-              />
-            </div>
-          </div>
         )}
       </div>
+      {onCancel && row.jobId && !isUploading && (
+        <button
+          onClick={() => onCancel(row.jobId)}
+          aria-label={isFailed ? `Delete ${filename}` : `Cancel ${filename}`}
+          title={isFailed ? 'Remove from list' : 'Cancel and remove'}
+          className="shrink-0 rounded-md p-1 text-ink-faint hover:bg-red-400/10 hover:text-red-400 transition-colors"
+        >
+          <XIcon className="h-3.5 w-3.5" />
+        </button>
+      )}
     </div>
   )
 }
 
-// ─── Active Jobs Panel ────────────────────────────────────────────────────────
+function ActivityPanel({
+  uploadingFile,
+  modelName,
+  processingJobs,
+  failedJobs = [],
+  onCancel,
+  uploadError,
+}) {
+  // Build a unified list. The current in-flight upload (no job_id yet) sits at
+  // the top; everything already in the queue follows it; failed jobs trail.
+  const rows = []
+  if (uploadingFile) {
+    rows.push({
+      kind: 'uploading',
+      filename: uploadingFile.name || 'document',
+      label: 'Uploading…',
+    })
+  }
+  if (uploadError) {
+    rows.push({
+      kind: 'error',
+      filename: uploadError.filename || 'document',
+      label: 'Upload failed',
+      error: uploadError.message,
+    })
+  }
+  for (const job of processingJobs) {
+    rows.push({
+      kind: 'processing',
+      jobId: job.job_id,
+      filename: job.filename || job.job_id,
+      label: job.status === 'pending' || job.status === 'queued' ? 'Queued' : 'Processing…',
+      elapsed: relativeElapsed(job.created_at),
+    })
+  }
+  for (const job of failedJobs) {
+    rows.push({
+      kind: 'failed',
+      jobId: job.job_id,
+      filename: job.filename || job.job_id,
+      label: 'Extraction failed',
+      error: job.error || job.meta?.error || null,
+      elapsed: relativeTime(job.updated_at || job.created_at),
+    })
+  }
 
-function ActiveJobsPanel({ jobs }) {
+  const inFlight = rows.filter((r) => r.kind === 'uploading' || r.kind === 'processing').length
+  const failedCount = failedJobs.length
+
+  let summary
+  if (inFlight > 0 && failedCount > 0) {
+    summary = `${inFlight} in progress · ${failedCount} failed`
+  } else if (inFlight > 0) {
+    summary = `${inFlight} document${inFlight !== 1 ? 's' : ''} in progress`
+  } else if (failedCount > 0) {
+    summary = `${failedCount} failed job${failedCount !== 1 ? 's' : ''}`
+  } else {
+    summary = 'Nothing in flight'
+  }
+
   return (
     <div className="flex flex-col h-full">
       <div className="shrink-0 px-4 py-3.5 border-b border-surface-border">
-        <p className="text-sm font-semibold text-ink">Processing documents</p>
+        <p className="text-sm font-semibold text-ink">Activity</p>
         <p className="text-xs text-ink-muted mt-0.5">
-          {jobs.length} document{jobs.length !== 1 ? 's' : ''} in progress
+          {summary}
+          {modelName && inFlight > 0 && <span className="text-ink-faint"> · {modelName}</span>}
         </p>
       </div>
 
       <div className="flex-1 overflow-y-auto p-3 space-y-2 min-h-0">
-        {jobs.map((job) => (
-          <div
-            key={job.job_id}
-            className="flex items-center gap-3 rounded-xl border border-surface-border bg-surface-muted/40 px-3 py-3"
-          >
-            <Loader2 className="h-4 w-4 shrink-0 text-amber-400 animate-spin" />
-            <div className="min-w-0 flex-1">
-              <p className="text-xs font-medium text-ink truncate">
-                {job.filename || job.job_id}
-              </p>
-              <p className="text-[11px] text-ink-faint mt-0.5 capitalize">{job.status}</p>
-            </div>
-          </div>
-        ))}
+        {rows.length === 0 ? (
+          <p className="text-xs text-ink-faint text-center py-8">No active work.</p>
+        ) : (
+          rows.map((row, i) => (
+            <ActivityRow key={row.jobId || `local-${i}`} row={row} onCancel={onCancel} />
+          ))
+        )}
       </div>
 
       <div className="shrink-0 px-4 py-3 border-t border-surface-border">
         <p className="text-xs text-ink-faint text-center">
-          Documents appear in the table when complete
+          {failedCount > 0 ? 'Click × on a failed job to remove it' : 'Documents appear in the table when complete'}
         </p>
       </div>
     </div>
@@ -325,32 +371,46 @@ function ActiveJobsPanel({ jobs }) {
 export default function RightContextPanel({
   activeDoc,
   files,
-  onFiles,
   uploadState,
   uploadStates,
+  uploadError,
   modelName,
   onOpenPreview,
   onChat,
   onDownload,
   onDelete,
+  onCancelJob,
   onStartNewExtraction,
   processingJobs = [],
+  failedJobs = [],
+  forceActivityView = false,
 }) {
-  const isExtracting =
-    uploadState === uploadStates?.UPLOADING ||
-    uploadState === uploadStates?.SUBMITTED ||
-    uploadState === uploadStates?.ERROR
+  const isUploading = uploadState === uploadStates?.UPLOADING
+  const hasUploadError = uploadState === uploadStates?.ERROR
+  const hasActivity =
+    isUploading || hasUploadError || processingJobs.length > 0 || failedJobs.length > 0
+
+  // Priority:
+  //   1. User explicitly clicked the ACTIVE/FAILED stat → force Activity even
+  //      if a document is selected. Falls through to TipsPanel if nothing.
+  //   2. A document is currently selected → preview takes precedence.
+  //   3. Any in-flight or failed work → Activity panel.
+  //   4. Default → Tips panel (no third drop zone here; single entry point is
+  //      the top extraction bar).
+  const activityPanel = (
+    <ActivityPanel
+      uploadingFile={isUploading ? files?.[0] : null}
+      modelName={modelName}
+      processingJobs={processingJobs}
+      failedJobs={failedJobs}
+      onCancel={onCancelJob}
+      uploadError={hasUploadError ? uploadError : null}
+    />
+  )
 
   let inner
-  if (isExtracting) {
-    inner = (
-      <ExtractionProgressPanel
-        files={files}
-        modelName={modelName}
-        state={uploadState}
-        STATES={uploadStates}
-      />
-    )
+  if (forceActivityView && hasActivity) {
+    inner = activityPanel
   } else if (activeDoc) {
     inner = (
       <DocumentPreviewPanel
@@ -362,10 +422,10 @@ export default function RightContextPanel({
         onStartNewExtraction={onStartNewExtraction}
       />
     )
-  } else if (processingJobs.length > 0) {
-    inner = <ActiveJobsPanel jobs={processingJobs} />
+  } else if (hasActivity) {
+    inner = activityPanel
   } else {
-    inner = <UploadPanel onFiles={onFiles} />
+    inner = <TipsPanel />
   }
 
   return (

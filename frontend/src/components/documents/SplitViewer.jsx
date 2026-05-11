@@ -27,17 +27,24 @@ import remarkGfm from 'remark-gfm'
 import { Document, Page, pdfjs } from 'react-pdf'
 import 'react-pdf/dist/Page/AnnotationLayer.css'
 import 'react-pdf/dist/Page/TextLayer.css'
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { deleteJob, retryJob } from '../../api/jobs'
 import { useApp } from '../../context/AppContext'
 import { useJobs } from '../../context/JobContext'
 import PolicyReviewPanel from './PolicyReviewPanel'
 import Badge from '../ui/Badge'
 
-// Vite-bundled pdf.js worker — required by react-pdf so parsing happens off the main thread.
-pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.min.mjs',
-  import.meta.url,
-).toString()
+// Vite emits the pdf.js worker as a hashed asset via the ?url import. This is
+// more reliable than `new URL(specifier, import.meta.url)` against pdfjs-dist's
+// exports map and avoids "Failed to fetch dynamically imported module" in
+// production builds.
+pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
+
+if (import.meta.env.DEV) {
+  // One-time sanity log so an API/Worker version skew is obvious in the
+  // console rather than hidden behind a generic "Failed to render PDF".
+  console.info('[PDF] pdfjs version', pdfjs.version, 'worker', pdfWorkerUrl)
+}
 
 const TABS = [
   { key: 'content', label: 'Content' },
@@ -150,6 +157,7 @@ function injectHighlightsIntoHtml(html, clauses, zoom = 100) {
 function PdfViewer({ src, zoom, scrollRef, fileLabel }) {
   const [numPages, setNumPages] = useState(0)
   const [pageWidth, setPageWidth] = useState(800)
+  const [loadError, setLoadError] = useState(null)
   const containerRef = useRef(null)
 
   // Measure the container width so pages render at the right size for the
@@ -167,19 +175,49 @@ function PdfViewer({ src, zoom, scrollRef, fileLabel }) {
     return () => ro.disconnect()
   }, [])
 
+  // Reset the error when the source changes so a retry can show "Loading…"
+  // again instead of being stuck on the previous failure.
+  useEffect(() => {
+    setLoadError(null)
+  }, [src])
+
   const setRefs = useCallback((node) => {
     containerRef.current = node
     if (typeof scrollRef === 'function') scrollRef(node)
     else if (scrollRef) scrollRef.current = node
   }, [scrollRef])
 
+  const handleLoadError = useCallback((err) => {
+    console.error('[PDF] load error', err)
+    setLoadError(err)
+  }, [])
+
+  const handleSourceError = useCallback((err) => {
+    console.error('[PDF] source error', err)
+    setLoadError(err)
+  }, [])
+
+  const errorNode = (
+    <div className="py-12 px-6 text-center text-sm text-red-400">
+      <p className="font-medium">Failed to render PDF.</p>
+      {loadError && (
+        <p className="mt-2 break-words text-xs text-red-400/80">
+          {loadError.name ? `${loadError.name}: ` : ''}
+          {loadError.message || String(loadError)}
+        </p>
+      )}
+    </div>
+  )
+
   return (
     <div ref={setRefs} className="h-full w-full overflow-auto bg-surface-subtle/40 px-4 py-4">
       <Document
         file={src}
         onLoadSuccess={({ numPages: n }) => setNumPages(n)}
+        onLoadError={handleLoadError}
+        onSourceError={handleSourceError}
         loading={<div className="py-12 text-center text-sm text-ink-muted">Loading PDF…</div>}
-        error={<div className="py-12 text-center text-sm text-red-400">Failed to render PDF.</div>}
+        error={errorNode}
         className="flex flex-col items-center gap-4"
       >
         {Array.from({ length: numPages }, (_, i) => (
@@ -201,6 +239,7 @@ function OriginalPreview({ doc, backendUrl, policyReview, scrollRef }) {
   const [state, setState] = useState('loading')
   const [objectUrl, setObjectUrl] = useState(null)
   const [htmlPreview, setHtmlPreview] = useState('')
+  const [previewError, setPreviewError] = useState(null)
   const [retryCount, setRetryCount] = useState(0)
   const [zoom, setZoom] = useState(100)
 
@@ -224,6 +263,7 @@ function OriginalPreview({ doc, backendUrl, policyReview, scrollRef }) {
 
   useEffect(() => {
     if (!canPreview || !previewUrl) {
+      setPreviewError(canPreview ? new Error('No file URL') : null)
       setState('error')
       return undefined
     }
@@ -233,13 +273,22 @@ function OriginalPreview({ doc, backendUrl, policyReview, scrollRef }) {
     setState('loading')
     setObjectUrl(null)
     setHtmlPreview('')
+    setPreviewError(null)
 
     fetch(previewUrl, { signal: controller.signal })
       .then((response) => {
-        if (!response.ok) throw new Error('Preview unavailable')
+        if (!response.ok) {
+          throw new Error(`Preview unavailable (HTTP ${response.status} ${response.statusText || ''})`.trim())
+        }
         if (isOffice) return response.text()
         const contentType = response.headers.get('content-type') || ''
-        if (contentType.includes('application/json')) throw new Error('Preview unavailable')
+        if (contentType.includes('application/json')) {
+          // Backend returns JSON only on error paths — fetch the body so we
+          // can surface the server's detail message rather than a generic one.
+          return response.json().then((body) => {
+            throw new Error(body?.detail || 'Preview unavailable (unexpected JSON response)')
+          })
+        }
         return response.blob()
       })
       .then((payload) => {
@@ -252,14 +301,17 @@ function OriginalPreview({ doc, backendUrl, policyReview, scrollRef }) {
         setState('ok')
       })
       .catch((error) => {
-        if (error.name !== 'AbortError') setState('error')
+        if (error.name === 'AbortError') return
+        console.error('[PDF] preview fetch failed', error, { previewUrl })
+        setPreviewError(error)
+        setState('error')
       })
 
     return () => {
       controller.abort()
       if (nextObjectUrl) URL.revokeObjectURL(nextObjectUrl)
     }
-  }, [previewUrl, retryCount, isOffice])
+  }, [previewUrl, retryCount, isOffice, canPreview])
 
   const zoomOut = () => setZoom((value) => Math.max(50, value - 10))
   const zoomIn = () => setZoom((value) => Math.min(200, value + 10))
@@ -299,6 +351,11 @@ function OriginalPreview({ doc, backendUrl, policyReview, scrollRef }) {
               ? 'This file type cannot be previewed inline.'
               : 'Could not load the source file. The parsed extraction is still available on the right.'}
           </p>
+          {canPreview && previewError && (
+            <p className="mt-2 max-w-sm break-words text-xs leading-5 text-red-400/80">
+              {previewError.message || String(previewError)}
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {canPreview && previewUrl && (

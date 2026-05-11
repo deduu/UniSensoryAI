@@ -27,16 +27,7 @@ function ThinkingBlock({ content }) {
 function MessageBubble({ message }) {
   const isUser = message.role === 'user'
   const isAssistant = message.role === 'assistant'
-
-  // Parse citations from content — look for [1], [2], etc.
-  const renderContentWithCitations = (content, citations) => {
-    if (!citations || citations.length === 0) {
-      return <MarkdownRenderer content={content} />
-    }
-
-    // We render markdown normally, citations are rendered as separate badges below
-    return <MarkdownRenderer content={content} />
-  }
+  const citations = isAssistant ? message.citations : null
 
   return (
     <div className={`flex gap-3 ${isUser ? 'flex-row-reverse' : ''} animate-slide-up-fade`}>
@@ -49,14 +40,14 @@ function MessageBubble({ message }) {
       <div className={`flex-1 min-w-0 max-w-[85%] ${isUser ? 'flex flex-col items-end' : ''}`}>
         <div className={`rounded-2xl px-4 py-3 ${isUser ? 'bg-brand/15 border border-brand/20' : 'bg-surface-muted/50 border border-surface-border/50'}`}>
           {isAssistant && message.thinking_content && <ThinkingBlock content={message.thinking_content} />}
-          {renderContentWithCitations(message.content, message.citations)}
+          <MarkdownRenderer content={message.content} citations={citations} />
         </div>
 
         {/* Citations list */}
-        {isAssistant && message.citations && message.citations.length > 0 && (
+        {isAssistant && citations && citations.length > 0 && (
           <div className="flex flex-wrap items-center gap-1.5 mt-2 px-1">
             <span className="text-[10px] text-ink-faint mr-1">Sources:</span>
-            {message.citations.map((cite, i) => (
+            {citations.map((cite, i) => (
               <CitationBadge key={i} index={i + 1} citation={cite} />
             ))}
           </div>
@@ -78,7 +69,7 @@ function MessageBubble({ message }) {
   )
 }
 
-function StreamingMessage({ content, thinkingContent }) {
+function StreamingMessage({ content, thinkingContent, citations }) {
   return (
     <div className="flex gap-3 animate-slide-up-fade">
       <div className="shrink-0 flex items-center justify-center h-8 w-8 rounded-xl bg-cyan-500/15">
@@ -88,7 +79,7 @@ function StreamingMessage({ content, thinkingContent }) {
         <div className="rounded-2xl px-4 py-3 bg-surface-muted/50 border border-surface-border/50">
           {thinkingContent && <ThinkingBlock content={thinkingContent} />}
           {content ? (
-            <MarkdownRenderer content={content} />
+            <MarkdownRenderer content={content} citations={citations} />
           ) : (
             <div className="flex items-center gap-1.5">
               <div className="flex gap-1">
@@ -111,7 +102,7 @@ const SUGGESTED_PROMPTS = [
   { icon: ArrowRight, text: 'Compare insights across uploaded files' },
 ]
 
-export default function ChatMessages({ messages, streamingContent, streamingThinking, isStreaming, onSuggestedPrompt }) {
+export default function ChatMessages({ messages, streamingContent, streamingThinking, streamingCitations, isStreaming, onSuggestedPrompt }) {
   const scrollRef = useRef(null)
   const bottomRef = useRef(null)
   const [showScrollBtn, setShowScrollBtn] = useState(false)
@@ -161,7 +152,7 @@ export default function ChatMessages({ messages, streamingContent, streamingThin
         {messages.map((msg) => (
           <MessageBubble key={msg.id} message={msg} />
         ))}
-        {isStreaming && <StreamingMessage content={streamingContent} thinkingContent={streamingThinking} />}
+        {isStreaming && <StreamingMessage content={streamingContent} thinkingContent={streamingThinking} citations={streamingCitations} />}
         <div ref={bottomRef} />
       </div>
 

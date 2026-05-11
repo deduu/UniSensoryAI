@@ -20,6 +20,7 @@ export function useChat() {
   const [isStreaming, setIsStreaming] = useState(false)
   const [streamingContent, setStreamingContent] = useState('')
   const [streamingThinking, setStreamingThinking] = useState('')
+  const [streamingCitations, setStreamingCitations] = useState([])
   const [error, setError] = useState(null)
 
   // Chat config
@@ -168,9 +169,14 @@ export function useChat() {
     let fullThinking = ''
     let lastUsage = null
 
+    // Pre-build citations from selected docs so inline [N] markers can render
+    // as clickable badges while the response streams in.
+    const liveCitations = buildCitations()
+
     setIsStreaming(true)
     setStreamingContent('')
     setStreamingThinking('')
+    setStreamingCitations(liveCitations)
 
     try {
       const config = {
@@ -216,7 +222,7 @@ export function useChat() {
 
     const latencyMs = Date.now() - startTime
     const parsed = thinkingEnabled ? parseThinking(fullContent) : { thinking: '', content: fullContent }
-    const citations = buildCitations()
+    const citations = liveCitations
 
     // Save assistant message to backend
     try {
@@ -262,6 +268,7 @@ export function useChat() {
     setIsStreaming(false)
     setStreamingContent('')
     setStreamingThinking('')
+    setStreamingCitations([])
     abortRef.current = null
   }, [activeConversationId, messages, modelId, temperature, thinkingEnabled, isStreaming, backendUrl, apiKeys, buildDocContext, buildCitations, createNewConversation, loadConversations])
 
@@ -272,7 +279,7 @@ export function useChat() {
 
   return {
     conversations, activeConversationId, messages, isStreaming,
-    streamingContent, streamingThinking, error,
+    streamingContent, streamingThinking, streamingCitations, error,
     modelId, setModelId, thinkingEnabled, setThinkingEnabled,
     streamingEnabled, setStreamingEnabled, temperature, setTemperature,
     selectedDocIds, setSelectedDocIds,
