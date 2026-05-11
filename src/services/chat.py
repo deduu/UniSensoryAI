@@ -24,10 +24,13 @@ class ChatService(BaseService[ChatConversation]):
         thinking_enabled: bool = False,
         streaming_enabled: bool = True,
         grounded_document_ids: Optional[list[str]] = None,
+        *,
+        tenant_id: str,
     ) -> ChatConversation:
         """Create a new chat conversation."""
         conv = ChatConversation(
             id=str(uuid.uuid4()),
+            tenant_id=tenant_id,
             title=title,
             model_id=model_id,
             temperature=temperature,
@@ -41,7 +44,11 @@ class ChatService(BaseService[ChatConversation]):
         return conv
 
     async def list_conversations(
-        self, limit: int = 50, offset: int = 0
+        self,
+        limit: int = 50,
+        offset: int = 0,
+        *,
+        tenant_id: Optional[str] = None,
     ) -> Sequence[ChatConversation]:
         """List conversations ordered by most recently updated."""
         stmt = (
@@ -50,11 +57,16 @@ class ChatService(BaseService[ChatConversation]):
             .limit(limit)
             .offset(offset)
         )
+        if tenant_id is not None:
+            stmt = stmt.where(ChatConversation.tenant_id == tenant_id)
         result = await self.db.execute(stmt)
         return result.scalars().all()
 
     async def get_conversation_with_messages(
-        self, conversation_id: str
+        self,
+        conversation_id: str,
+        *,
+        tenant_id: Optional[str] = None,
     ) -> Optional[ChatConversation]:
         """Get a conversation with all its messages eagerly loaded."""
         stmt = (
@@ -62,6 +74,8 @@ class ChatService(BaseService[ChatConversation]):
             .options(selectinload(ChatConversation.messages))
             .where(ChatConversation.id == conversation_id)
         )
+        if tenant_id is not None:
+            stmt = stmt.where(ChatConversation.tenant_id == tenant_id)
         result = await self.db.execute(stmt)
         return result.scalar_one_or_none()
 

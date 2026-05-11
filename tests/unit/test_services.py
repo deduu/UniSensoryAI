@@ -100,11 +100,14 @@ class TestIngestionService:
 
         service = IngestionService(mock_session)
         with patch("src.services.ingestion.uuid.uuid4", return_value="mock-uuid"):
-            await service.create_job("/path/to/file.pdf", meta={"key": "value"})
+            await service.create_job(
+                "/path/to/file.pdf", meta={"key": "value"}, tenant_id="t-1"
+            )
 
         mock_session.add.assert_called_once()
         added_obj = mock_session.add.call_args[0][0]
         assert added_obj.id == "mock-uuid"
+        assert added_obj.tenant_id == "t-1"
         assert added_obj.status == IngestionStatus.PENDING
         assert added_obj.file_path == "/path/to/file.pdf"
         assert added_obj.meta == {"key": "value"}
@@ -179,13 +182,16 @@ class TestDocumentService:
         content = {"content": "Extracted text here", "chunks": [{"page": 1}]}
 
         with patch("src.services.document.uuid.uuid4", return_value="doc-uuid"):
-            await service.create_document("job-1", "file.pdf", content)
+            await service.create_document(
+                "job-1", "file.pdf", content, tenant_id="t-1"
+            )
 
         mock_session.add.assert_called_once()
         added_obj = mock_session.add.call_args[0][0]
         assert added_obj.content_text == "Extracted text here"
         assert added_obj.content_chunks == [{"page": 1}]
         assert added_obj.job_id == "job-1"
+        assert added_obj.tenant_id == "t-1"
         assert added_obj.filename == "file.pdf"
 
     @pytest.mark.asyncio
@@ -198,7 +204,9 @@ class TestDocumentService:
         content = {"text": "Fallback text"}
 
         with patch("src.services.document.uuid.uuid4", return_value="doc-uuid-2"):
-            await service.create_document("job-2", "file.docx", content)
+            await service.create_document(
+                "job-2", "file.docx", content, tenant_id="t-1"
+            )
 
         added_obj = mock_session.add.call_args[0][0]
         assert added_obj.content_text == "Fallback text"

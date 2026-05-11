@@ -1,9 +1,11 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form, Depends, Query, Request
 from fastapi.responses import StreamingResponse, FileResponse
 from src.api.validators import UploadValidator
-from src.api.auth import get_current_user
+from src.api.auth import UserContext, get_user_context
+from src.api.auth_routes import router as auth_router
 from src.api.rate_limit import RateLimitDep
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.sessions import SessionMiddleware
 from fastapi.responses import JSONResponse
 from pathlib import Path
 from typing import Optional
@@ -16,6 +18,7 @@ from contextlib import asynccontextmanager
 
 # DB and Queuing imports
 from src.db.session import init_db, get_db
+from src.db import session as db_session
 from src.ingestion import init_ingestion_queue, get_ingestion_queue
 from src.ingestion.converter import DocumentConverter
 from src.ingestion.processor import process_document_job
@@ -76,13 +79,23 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Initializing Database...")
     init_db(DATABASE_URL)
-    
+
+    # Recover orphaned jobs from a previous run. The in-memory worker queue
+    # doesn't survive restarts, so anything still PENDING/PROCESSING is dead.
+    if db_session.session_manager is not None:
+        async with db_session.session_manager.session() as session:
+            service = IngestionService(session)
+            recovered = await service.fail_interrupted_jobs()
+            await session.commit()
+            if recovered:
+                logger.warning(f"Marked {recovered} interrupted job(s) as FAILED on startup")
+
     logger.info("Initializing Ingestion Queue...")
     queue = init_ingestion_queue(process_document_job)
     await queue.start_worker()
-    
+
     yield
-    
+
     # Shutdown
     logger.info("Shutting down Ingestion Queue...")
     await queue.stop_worker()
@@ -96,11 +109,26 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=os.getenv(
+        "CORS_ALLOW_ORIGINS",
+        "http://localhost:5173,http://127.0.0.1:5173",
+    ).split(","),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Required by Authlib's OAuth flow to persist the state token between the
+# initial redirect and the callback. The secret signs the session cookie;
+# rotate by changing SESSION_SECRET.
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=os.getenv("SESSION_SECRET", "dev-session-secret-change-me"),
+    same_site="lax",
+    https_only=os.getenv("COOKIE_SECURE", "false").lower() == "true",
+)
+
+app.include_router(auth_router)
 
 @app.get("/")
 @app.get("/health")
@@ -116,7 +144,7 @@ async def process_document(
     api_keys: Optional[str] = Form(None),
     start_page: Optional[int] = Form(None, ge=1),
     end_page: Optional[int] = Form(None, ge=1),
-    _user: Optional[dict] = Depends(get_current_user),
+    user: UserContext = Depends(get_user_context),
     _rate_limit: None = Depends(RateLimitDep(requests_per_minute=100)),
 ) -> JSONResponse:
     """
@@ -162,7 +190,9 @@ async def process_document(
         except Exception:
             pass
             
-        job_id = await queue.enqueue(str(file_path.absolute()), meta=meta)
+        job_id = await queue.enqueue(
+            str(file_path.absolute()), meta=meta, tenant_id=user.tenant_id
+        )
         
         return JSONResponse(
             status_code=202,
@@ -182,11 +212,14 @@ async def list_jobs(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db=Depends(get_db),
+    user: UserContext = Depends(get_user_context),
 ):
     """List all jobs with pagination."""
     service = IngestionService(db)
     try:
-        jobs = await service.list_jobs(limit=limit, offset=offset)
+        jobs = await service.list_jobs(
+            limit=limit, offset=offset, tenant_id=user.tenant_id
+        )
         return JSONResponse(content=[
             {
                 "job_id": job.id,
@@ -208,11 +241,17 @@ async def list_jobs(
 
 
 @app.get("/v1/jobs/{job_id}")
-async def get_job_status(job_id: str, db=Depends(get_db)):
+async def get_job_status(
+    job_id: str,
+    db=Depends(get_db),
+    user: UserContext = Depends(get_user_context),
+):
     """Get the status and result of a processing job."""
     service = IngestionService(db)
     try:
-        job = await service.get_by_id(job_id, raise_not_found=False)
+        job = await service.get_by_id(
+            job_id, raise_not_found=False, tenant_id=user.tenant_id
+        )
         if not job:
             raise HTTPException(status_code=404, detail="Job not found")
 
@@ -239,11 +278,17 @@ async def get_job_status(job_id: str, db=Depends(get_db)):
 
 
 @app.delete("/v1/jobs/{job_id}")
-async def delete_job(job_id: str, db=Depends(get_db)):
+async def delete_job(
+    job_id: str,
+    db=Depends(get_db),
+    user: UserContext = Depends(get_user_context),
+):
     """Delete a job and its documents, clean up uploaded file."""
     service = IngestionService(db)
     try:
-        job = await service.get_by_id(job_id, raise_not_found=False)
+        job = await service.get_by_id(
+            job_id, raise_not_found=False, tenant_id=user.tenant_id
+        )
         if not job:
             raise HTTPException(status_code=404, detail="Job not found")
 
@@ -269,11 +314,17 @@ async def delete_job(job_id: str, db=Depends(get_db)):
 
 
 @app.post("/v1/jobs/{job_id}/retry")
-async def retry_job(job_id: str, db=Depends(get_db)):
+async def retry_job(
+    job_id: str,
+    db=Depends(get_db),
+    user: UserContext = Depends(get_user_context),
+):
     """Retry a failed job by re-enqueuing it."""
     service = IngestionService(db)
     try:
-        job = await service.get_by_id(job_id, raise_not_found=False)
+        job = await service.get_by_id(
+            job_id, raise_not_found=False, tenant_id=user.tenant_id
+        )
         if not job:
             raise HTTPException(status_code=404, detail="Job not found")
 
@@ -308,11 +359,17 @@ async def retry_job(job_id: str, db=Depends(get_db)):
 
 
 @app.get("/v1/jobs/{job_id}/file")
-async def serve_job_file(job_id: str, db=Depends(get_db)):
+async def serve_job_file(
+    job_id: str,
+    db=Depends(get_db),
+    user: UserContext = Depends(get_user_context),
+):
     """Serve the original uploaded file for a job."""
     service = IngestionService(db)
     try:
-        job = await service.get_by_id(job_id, raise_not_found=False)
+        job = await service.get_by_id(
+            job_id, raise_not_found=False, tenant_id=user.tenant_id
+        )
         if not job:
             raise HTTPException(status_code=404, detail="Job not found")
 
@@ -337,11 +394,17 @@ async def serve_job_file(job_id: str, db=Depends(get_db)):
 # ---------------------------------------------------------------------------
 
 @app.get("/v1/jobs/{job_id}/preview")
-async def preview_job_file(job_id: str, db=Depends(get_db)):
+async def preview_job_file(
+    job_id: str,
+    db=Depends(get_db),
+    user: UserContext = Depends(get_user_context),
+):
     """Return text preview content for Office source files."""
     service = IngestionService(db)
     try:
-        job = await service.get_by_id(job_id, raise_not_found=False)
+        job = await service.get_by_id(
+            job_id, raise_not_found=False, tenant_id=user.tenant_id
+        )
         if not job:
             raise HTTPException(status_code=404, detail="Job not found")
 
@@ -373,13 +436,19 @@ async def preview_job_file(job_id: str, db=Depends(get_db)):
 
 
 @app.get("/v1/jobs/{job_id}/preview/html", response_class=None)
-async def preview_job_file_html(job_id: str, db=Depends(get_db)):
+async def preview_job_file_html(
+    job_id: str,
+    db=Depends(get_db),
+    user: UserContext = Depends(get_user_context),
+):
     """Return an HTML document for browser-native Office file preview (DOCX, XLSX, PPTX)."""
     from fastapi.responses import HTMLResponse
 
     service = IngestionService(db)
     try:
-        job = await service.get_by_id(job_id, raise_not_found=False)
+        job = await service.get_by_id(
+            job_id, raise_not_found=False, tenant_id=user.tenant_id
+        )
         if not job:
             raise HTTPException(status_code=404, detail="Job not found")
 
@@ -403,7 +472,7 @@ async def preview_job_file_html(job_id: str, db=Depends(get_db)):
 @app.get("/v1/jobs/{job_id}/stream")
 async def stream_job_status(
     job_id: str,
-    _user: Optional[dict] = Depends(get_current_user),
+    user: UserContext = Depends(get_user_context),
 ):
     """Stream job status updates via Server-Sent Events."""
     from src.api.events import job_status_stream
@@ -424,7 +493,11 @@ async def stream_job_status(
 # ---------------------------------------------------------------------------
 
 @app.post("/v1/chat/conversations")
-async def create_conversation(request: Request, db=Depends(get_db)):
+async def create_conversation(
+    request: Request,
+    db=Depends(get_db),
+    user: UserContext = Depends(get_user_context),
+):
     """Create a new chat conversation."""
     body = await request.json()
     service = ChatService(db)
@@ -436,6 +509,7 @@ async def create_conversation(request: Request, db=Depends(get_db)):
             thinking_enabled=body.get("thinking_enabled", False),
             streaming_enabled=body.get("streaming_enabled", True),
             grounded_document_ids=body.get("grounded_document_ids"),
+            tenant_id=user.tenant_id,
         )
         await db.commit()
         return JSONResponse(status_code=201, content={
@@ -459,11 +533,14 @@ async def list_conversations(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db=Depends(get_db),
+    user: UserContext = Depends(get_user_context),
 ):
     """List all chat conversations."""
     service = ChatService(db)
     try:
-        convs = await service.list_conversations(limit=limit, offset=offset)
+        convs = await service.list_conversations(
+            limit=limit, offset=offset, tenant_id=user.tenant_id
+        )
         return JSONResponse(content=[
             {
                 "id": c.id,
@@ -480,11 +557,17 @@ async def list_conversations(
 
 
 @app.get("/v1/chat/conversations/{conversation_id}")
-async def get_conversation(conversation_id: str, db=Depends(get_db)):
+async def get_conversation(
+    conversation_id: str,
+    db=Depends(get_db),
+    user: UserContext = Depends(get_user_context),
+):
     """Get a conversation with all its messages."""
     service = ChatService(db)
     try:
-        conv = await service.get_conversation_with_messages(conversation_id)
+        conv = await service.get_conversation_with_messages(
+            conversation_id, tenant_id=user.tenant_id
+        )
         if not conv:
             raise HTTPException(status_code=404, detail="Conversation not found")
         return JSONResponse(content={
@@ -522,12 +605,19 @@ async def get_conversation(conversation_id: str, db=Depends(get_db)):
 
 
 @app.put("/v1/chat/conversations/{conversation_id}")
-async def update_conversation(conversation_id: str, request: Request, db=Depends(get_db)):
+async def update_conversation(
+    conversation_id: str,
+    request: Request,
+    db=Depends(get_db),
+    user: UserContext = Depends(get_user_context),
+):
     """Update a conversation's settings."""
     body = await request.json()
     service = ChatService(db)
     try:
-        conv = await service.get_by_id(conversation_id, raise_not_found=False)
+        conv = await service.get_conversation_with_messages(
+            conversation_id, tenant_id=user.tenant_id
+        )
         if not conv:
             raise HTTPException(status_code=404, detail="Conversation not found")
 
@@ -545,11 +635,17 @@ async def update_conversation(conversation_id: str, request: Request, db=Depends
 
 
 @app.delete("/v1/chat/conversations/{conversation_id}")
-async def delete_conversation(conversation_id: str, db=Depends(get_db)):
+async def delete_conversation(
+    conversation_id: str,
+    db=Depends(get_db),
+    user: UserContext = Depends(get_user_context),
+):
     """Delete a conversation and all its messages."""
     service = ChatService(db)
     try:
-        conv = await service.get_by_id(conversation_id, raise_not_found=False)
+        conv = await service.get_conversation_with_messages(
+            conversation_id, tenant_id=user.tenant_id
+        )
         if not conv:
             raise HTTPException(status_code=404, detail="Conversation not found")
         await service.delete_conversation(conversation_id)
@@ -563,12 +659,19 @@ async def delete_conversation(conversation_id: str, db=Depends(get_db)):
 
 
 @app.post("/v1/chat/conversations/{conversation_id}/messages")
-async def add_message(conversation_id: str, request: Request, db=Depends(get_db)):
+async def add_message(
+    conversation_id: str,
+    request: Request,
+    db=Depends(get_db),
+    user: UserContext = Depends(get_user_context),
+):
     """Add a message to a conversation."""
     body = await request.json()
     service = ChatService(db)
     try:
-        conv = await service.get_by_id(conversation_id, raise_not_found=False)
+        conv = await service.get_conversation_with_messages(
+            conversation_id, tenant_id=user.tenant_id
+        )
         if not conv:
             raise HTTPException(status_code=404, detail="Conversation not found")
 
@@ -605,8 +708,19 @@ async def add_message(conversation_id: str, request: Request, db=Depends(get_db)
 
 
 @app.get("/v1/jobs/{job_id}/policy-review")
-async def get_job_policy_review(job_id: str, db=Depends(get_db)):
+async def get_job_policy_review(
+    job_id: str,
+    db=Depends(get_db),
+    user: UserContext = Depends(get_user_context),
+):
     """Return the latest persisted policy review result for a completed job."""
+    # Tenant guard: confirm the job belongs to the caller's tenant first.
+    ingestion = IngestionService(db)
+    owner = await ingestion.get_by_id(
+        job_id, raise_not_found=False, tenant_id=user.tenant_id
+    )
+    if owner is None:
+        raise HTTPException(status_code=404, detail="Job not found")
     service = PolicyReviewService(db)
     try:
         result = await service.get_saved_review(job_id)
@@ -629,8 +743,16 @@ async def review_job_policy(
     job_id: str,
     review_request: PolicyReviewRequest,
     db=Depends(get_db),
+    user: UserContext = Depends(get_user_context),
 ):
     """Run parallel policy review agents against a completed parsed document."""
+    # Tenant guard: confirm the job belongs to the caller's tenant first.
+    ingestion = IngestionService(db)
+    owner = await ingestion.get_by_id(
+        job_id, raise_not_found=False, tenant_id=user.tenant_id
+    )
+    if owner is None:
+        raise HTTPException(status_code=404, detail="Job not found")
     service = PolicyReviewService(db)
     try:
         result = await service.review_job(job_id, review_request)
@@ -649,7 +771,10 @@ async def review_job_policy(
 # ---------------------------------------------------------------------------
 
 @app.post("/v1/chat/completions/stream")
-async def proxy_chat_stream(request: Request):
+async def proxy_chat_stream(
+    request: Request,
+    user: UserContext = Depends(get_user_context),
+):
     """
     Proxy OpenAI-compatible chat completions through the backend.
     Uses OPENAI_API_KEY / OPENAI_API_BASE from .env first;

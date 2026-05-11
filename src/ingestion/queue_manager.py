@@ -63,7 +63,13 @@ class IngestionQueue:
         # Rate limiter: 10 req/s, burst of 10
         self.outbound_limiter = RateLimiter(rate_limit=10.0, capacity=10.0)
 
-    async def enqueue(self, file_path: str, meta: Optional[dict] = None) -> str:
+    async def enqueue(
+        self,
+        file_path: str,
+        meta: Optional[dict] = None,
+        *,
+        tenant_id: str,
+    ) -> str:
         """
         Create a job record and enqueue the file path.
         Returns the job_id.
@@ -74,7 +80,7 @@ class IngestionQueue:
         # Create database record
         async with db_session.session_manager.session() as session:
             service = IngestionService(session)
-            job = await service.create_job(file_path, meta)
+            job = await service.create_job(file_path, meta, tenant_id=tenant_id)
             job_id = job.id
             await session.commit()
 
@@ -118,6 +124,7 @@ class IngestionQueue:
                     job = await service.update_status(job_id, IngestionStatus.PROCESSING)
                     await session.commit()
                     file_path = job.file_path
+                    tenant_id = job.tenant_id
                     model_id = (job.meta or {}).get("model_id", "qwen2-vl-2b-instruct")
                     api_keys = (job.meta or {}).get("api_keys", None)
                     start_page = (job.meta or {}).get("start_page", None)
@@ -157,7 +164,10 @@ class IngestionQueue:
                         raw_name = Path(file_path).name
                         display_name = (job.meta or {}).get("original_filename") or _strip_uuid_prefix(raw_name)
                         await doc_service.create_document(
-                            job_id=job_id, filename=display_name, content=result
+                            job_id=job_id,
+                            filename=display_name,
+                            content=result,
+                            tenant_id=tenant_id,
                         )
 
                         await session.commit()

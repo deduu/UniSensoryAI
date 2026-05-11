@@ -9,6 +9,11 @@ if TYPE_CHECKING:
 
 class Document(Base):
     id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     job_id: Mapped[Optional[str]] = mapped_column(ForeignKey("ingestionjobs.id", ondelete="SET NULL"), index=True, nullable=True)
     
     filename: Mapped[str] = mapped_column(String, nullable=False)

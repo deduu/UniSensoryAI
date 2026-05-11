@@ -22,10 +22,11 @@ Environment variables:
 import os
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Union
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Cookie, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
@@ -34,6 +35,45 @@ load_dotenv()
 
 # Security scheme
 _security = HTTPBearer(auto_error=False)
+
+# Seed tenant created by alembic migration 5ac699391b63 for backfill /
+# pre-auth uploads. Real tenants come from the JWT once auth is enabled.
+DEFAULT_TENANT_ID = os.getenv("DEFAULT_TENANT_ID", "default")
+
+# User id used for the synthetic dev context when AUTH_ENABLED=false.
+DEV_USER_ID = "dev-user"
+
+
+class UserContext(BaseModel):
+    """Typed identity for the current request.
+
+    Built from the JWT payload (real auth) or as a synthetic dev value
+    when ``AUTH_ENABLED=false``. Inject via ``Depends(get_user_context)``.
+    """
+
+    user_id: str = Field(..., description="Stable user identifier (JWT ``sub``).")
+    tenant_id: str = Field(..., description="Tenant the user belongs to.")
+    email: Optional[str] = Field(default=None, description="User email if available.")
+
+
+def resolve_tenant_id(user: Union[UserContext, Dict[str, Any], None]) -> str:
+    """Resolve the tenant_id for the current request.
+
+    Accepts a ``UserContext``, a raw JWT-payload dict, or ``None`` (auth
+    disabled). Falls back to ``DEFAULT_TENANT_ID`` when there is no user.
+    Raises 401 if a dict payload is missing the ``tenant_id`` claim.
+    """
+    if user is None:
+        return DEFAULT_TENANT_ID
+    if isinstance(user, UserContext):
+        return user.tenant_id
+    tenant_id = user.get("tenant_id")
+    if not tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token missing tenant_id claim",
+        )
+    return str(tenant_id)
 
 
 class AuthConfig:
@@ -169,3 +209,49 @@ async def get_current_user(
         )
 
     return verify_token(credentials.credentials)
+
+
+async def get_user_context(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(_security),
+    access_token: Optional[str] = Cookie(default=None),
+) -> UserContext:
+    """FastAPI dependency that always yields a ``UserContext``.
+
+    When ``AUTH_ENABLED=false`` (local dev) returns a synthetic context
+    scoped to ``DEFAULT_TENANT_ID``. When enabled, the JWT is read from
+    the ``access_token`` HttpOnly cookie (preferred) or the
+    ``Authorization: Bearer`` header (for API clients/CLIs). The token
+    must carry ``sub`` and ``tenant_id`` claims; otherwise 401.
+    """
+    if not AuthConfig.is_enabled():
+        return UserContext(user_id=DEV_USER_ID, tenant_id=DEFAULT_TENANT_ID)
+
+    raw_token: Optional[str] = None
+    if access_token:
+        raw_token = access_token
+    elif credentials is not None:
+        raw_token = credentials.credentials
+
+    if not raw_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    payload = verify_token(raw_token)
+
+    user_id = payload.get("sub")
+    tenant_id = payload.get("tenant_id")
+    if not user_id or not tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token missing required claim (sub/tenant_id)",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    return UserContext(
+        user_id=str(user_id),
+        tenant_id=str(tenant_id),
+        email=payload.get("email"),
+    )

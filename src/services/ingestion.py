@@ -10,8 +10,16 @@ class IngestionService(BaseService[IngestionJob]):
     def __init__(self, db: AsyncSession):
         super().__init__(db, IngestionJob)
 
-    async def get_by_id(self, item_id: Any, raise_not_found: bool = True) -> Optional[IngestionJob]:
+    async def get_by_id(
+        self,
+        item_id: Any,
+        raise_not_found: bool = True,
+        *,
+        tenant_id: Optional[str] = None,
+    ) -> Optional[IngestionJob]:
         stmt = select(self.model).where(self.model.id == item_id).options(selectinload(self.model.documents))
+        if tenant_id is not None:
+            stmt = stmt.where(self.model.tenant_id == tenant_id)
         result = await self.db.execute(stmt)
         obj = result.scalar_one_or_none()
         if not obj and raise_not_found:
@@ -19,10 +27,17 @@ class IngestionService(BaseService[IngestionJob]):
              raise NotFoundException(self.model.__name__, item_id)
         return obj
 
-    async def create_job(self, file_path: str, meta: Optional[dict[str, Any]] = None) -> IngestionJob:
+    async def create_job(
+        self,
+        file_path: str,
+        meta: Optional[dict[str, Any]] = None,
+        *,
+        tenant_id: str,
+    ) -> IngestionJob:
         job_id = str(uuid.uuid4())
         return await self.create(
             id=job_id,
+            tenant_id=tenant_id,
             file_path=file_path,
             status=IngestionStatus.PENDING,
             meta=meta
@@ -50,7 +65,30 @@ class IngestionService(BaseService[IngestionJob]):
     async def mark_completed(self, job_id: str, result_summary: Optional[dict[str, Any]] = None) -> IngestionJob:
         return await self.update_status(job_id, IngestionStatus.COMPLETED, result_summary)
 
-    async def list_jobs(self, limit: int = 50, offset: int = 0) -> Sequence[IngestionJob]:
+    async def fail_interrupted_jobs(self, error: str = "interrupted by server restart") -> int:
+        # The in-memory worker queue is lost on restart, so anything still in
+        # PENDING or PROCESSING was orphaned. Mark them FAILED so the UI stops
+        # spinning forever; users can re-upload deliberately.
+        stmt = select(self.model).where(
+            self.model.status.in_([IngestionStatus.PENDING, IngestionStatus.PROCESSING])
+        )
+        result = await self.db.execute(stmt)
+        orphaned = result.scalars().all()
+        for job in orphaned:
+            job.status = IngestionStatus.FAILED
+            meta = dict(job.meta) if job.meta else {}
+            meta["error"] = error
+            job.meta = meta
+        await self.db.flush()
+        return len(orphaned)
+
+    async def list_jobs(
+        self,
+        limit: int = 50,
+        offset: int = 0,
+        *,
+        tenant_id: Optional[str] = None,
+    ) -> Sequence[IngestionJob]:
         stmt = (
             select(self.model)
             .options(selectinload(self.model.documents))
@@ -58,5 +96,7 @@ class IngestionService(BaseService[IngestionJob]):
             .limit(limit)
             .offset(offset)
         )
+        if tenant_id is not None:
+            stmt = stmt.where(self.model.tenant_id == tenant_id)
         result = await self.db.execute(stmt)
         return result.scalars().all()

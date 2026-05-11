@@ -20,6 +20,7 @@ async def test_ingestion_queue_flow():
             mock_job = MagicMock(spec=IngestionJob)
             mock_job.id = "test-job-id"
             mock_job.file_path = "test.pdf"
+            mock_job.tenant_id = "t-1"
             mock_job.meta = {"model_id": "qwen2-vl-2b-instruct"}
 
             mock_service_instance.create_job = AsyncMock(return_value=mock_job)
@@ -36,9 +37,13 @@ async def test_ingestion_queue_flow():
 
                 queue = IngestionQueue(dummy_processor)
 
-                job_id = await queue.enqueue("test.pdf")
+                job_id = await queue.enqueue("test.pdf", tenant_id="t-1")
                 assert job_id == "test-job-id"
                 mock_service_instance.create_job.assert_called_once()
+                assert (
+                    mock_service_instance.create_job.call_args.kwargs["tenant_id"]
+                    == "t-1"
+                )
 
                 await queue.start_worker()
                 await asyncio.sleep(0.2)
@@ -63,6 +68,7 @@ async def test_ingestion_queue_worker_error():
             mock_job = MagicMock(spec=IngestionJob)
             mock_job.id = "error-job-id"
             mock_job.file_path = "error.pdf"
+            mock_job.tenant_id = "t-1"
             mock_job.meta = {}
 
             mock_service_instance.create_job = AsyncMock(return_value=mock_job)
@@ -74,7 +80,7 @@ async def test_ingestion_queue_worker_error():
 
             queue = IngestionQueue(error_processor)
 
-            await queue.enqueue("error.pdf")
+            await queue.enqueue("error.pdf", tenant_id="t-1")
             await queue.start_worker()
             await asyncio.sleep(0.2)
 
@@ -98,6 +104,7 @@ async def test_worker_passes_model_id_from_meta():
             mock_job = MagicMock(spec=IngestionJob)
             mock_job.id = "model-test-job"
             mock_job.file_path = "doc.pdf"
+            mock_job.tenant_id = "t-1"
             mock_job.meta = {"model_id": "gpt-4o"}
 
             mock_service_instance.create_job = AsyncMock(return_value=mock_job)
@@ -111,7 +118,7 @@ async def test_worker_passes_model_id_from_meta():
                 processor_mock = AsyncMock(return_value={"content": "ok"})
                 queue = IngestionQueue(processor_mock)
 
-                await queue.enqueue("doc.pdf", meta={"model_id": "gpt-4o"})
+                await queue.enqueue("doc.pdf", meta={"model_id": "gpt-4o"}, tenant_id="t-1")
                 await queue.start_worker()
                 await asyncio.sleep(0.2)
 
@@ -133,6 +140,7 @@ async def test_worker_defaults_model_id_when_missing():
             mock_job = MagicMock(spec=IngestionJob)
             mock_job.id = "default-model-job"
             mock_job.file_path = "doc.pdf"
+            mock_job.tenant_id = "t-1"
             mock_job.meta = {}
 
             mock_service_instance.create_job = AsyncMock(return_value=mock_job)
@@ -146,7 +154,7 @@ async def test_worker_defaults_model_id_when_missing():
                 processor_mock = AsyncMock(return_value={"content": "ok"})
                 queue = IngestionQueue(processor_mock)
 
-                await queue.enqueue("doc.pdf", meta={})
+                await queue.enqueue("doc.pdf", meta={}, tenant_id="t-1")
                 await queue.start_worker()
                 await asyncio.sleep(0.2)
 

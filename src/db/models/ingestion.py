@@ -1,5 +1,5 @@
 import enum
-from sqlalchemy import String, DateTime, Enum, JSON
+from sqlalchemy import String, DateTime, Enum, JSON, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime
 from ..base import Base, utc_now
@@ -16,6 +16,11 @@ class IngestionStatus(str, enum.Enum):
 
 class IngestionJob(Base):
     id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     status: Mapped[IngestionStatus] = mapped_column(
         Enum(IngestionStatus, native_enum=False), # native_enum=False for wider compatibility
         default=IngestionStatus.PENDING,

@@ -72,7 +72,9 @@ class TestRedisIngestionQueue:
                     return_value=mock_job
                 )
 
-                job_id = await queue.enqueue("test.pdf", meta={"model_id": "gpt-4o"})
+                job_id = await queue.enqueue(
+                    "test.pdf", meta={"model_id": "gpt-4o"}, tenant_id="t-1"
+                )
 
         assert job_id == "redis-job-1"
         mock_redis.rpush.assert_called_once_with("unisensory:jobs", "redis-job-1")
@@ -154,6 +156,7 @@ class TestRedisIngestionQueue:
             ) as MockService:
                 mock_job = MagicMock()
                 mock_job.file_path = "test.pdf"
+                mock_job.tenant_id = "t-1"
                 mock_job.meta = {"model_id": "test"}
                 MockService.return_value.update_status = AsyncMock(
                     return_value=mock_job

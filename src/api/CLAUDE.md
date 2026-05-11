@@ -19,13 +19,29 @@ Async API with lifespan-managed startup/shutdown.
 - `Depends(get_db)` for session injection in endpoint functions
 - All endpoints must be `async def`
 
+## Auth & Tenancy
+
+- Every endpoint (except `/`, `/health`) injects `user: UserContext = Depends(get_user_context)`.
+- `UserContext` (Pydantic) carries `user_id`, `tenant_id`, optional `email`.
+- When `AUTH_ENABLED=false` (local dev), `get_user_context` returns a synthetic
+  context scoped to `DEFAULT_TENANT_ID` (the seed tenant from migration
+  `5ac699391b63`). When `AUTH_ENABLED=true`, the JWT must carry `sub` and
+  `tenant_id` claims or the request gets 401.
+- Endpoints pass `user.tenant_id` into services. Service read methods
+  (`get_by_id`, `list_jobs`, `list_conversations`, `get_conversation_with_messages`)
+  take an optional `tenant_id` kwarg; when set, queries are scoped and
+  cross-tenant rows return `None` → endpoint translates to 404 (no existence leak).
+- OAuth login flow is **not yet implemented** — tokens must be minted externally.
+
 ## Known Issues (fix when modifying this code)
 
-- **Sync file I/O**: `open()` + `shutil.copyfileobj()` blocks event loop (line 74).
+- **Sync file I/O**: `open()` + `shutil.copyfileobj()` blocks event loop.
   Should use `aiofiles`.
-- **No filename sanitization**: `file.filename` used directly in path (line 70).
+- **No filename sanitization**: `file.filename` used directly in path.
   Path traversal risk.
 - **No file size limit**: Uploads unchecked. Add `UploadFile` size validation.
-- **No authentication**: All endpoints open. Add FastAPI dependency-based auth.
-- **No CORS**: Not configured. Add `CORSMiddleware` per environment.
-- **Hardcoded DB URL**: `DATABASE_URL` defaults to localhost:5434 (line 27).
+- **No login endpoint**: JWT verification works but there's no `/v1/auth/login` —
+  tokens must be created out-of-band (see `create_access_token` in `auth.py`).
+- **CORS**: configured but allow-list is hardcoded to `localhost:5173`.
+  Make env-driven before deploying.
+- **Hardcoded DB URL**: `DATABASE_URL` defaults to localhost:5434.

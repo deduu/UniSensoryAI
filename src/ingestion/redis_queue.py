@@ -94,12 +94,19 @@ class RedisIngestionQueue:
             )
         return self._redis
 
-    async def enqueue(self, file_path: str, meta: Optional[dict] = None) -> str:
+    async def enqueue(
+        self,
+        file_path: str,
+        meta: Optional[dict] = None,
+        *,
+        tenant_id: str,
+    ) -> str:
         """Create a DB record and enqueue job_id to Redis.
 
         Args:
             file_path: Path to the uploaded file.
             meta: Optional metadata dict (model_id, api_keys, etc).
+            tenant_id: Owning tenant for the job (NOT NULL on the row).
 
         Returns:
             The created job_id string.
@@ -112,7 +119,7 @@ class RedisIngestionQueue:
         # Create database record
         async with db_session.session_manager.session() as session:
             service = IngestionService(session)
-            job = await service.create_job(file_path, meta)
+            job = await service.create_job(file_path, meta, tenant_id=tenant_id)
             job_id = job.id
             await session.commit()
 
@@ -212,6 +219,7 @@ class RedisIngestionQueue:
             job = await service.update_status(job_id, IngestionStatus.PROCESSING)
             await session.commit()
             file_path = job.file_path
+            tenant_id = job.tenant_id
             meta = job.meta or {}
             model_id = meta.get("model_id", "qwen2-vl-2b-instruct")
             api_keys = meta.get("api_keys")
@@ -251,6 +259,7 @@ class RedisIngestionQueue:
                     job_id=job_id,
                     filename=Path(file_path).name,
                     content=result,
+                    tenant_id=tenant_id,
                 )
                 await session.commit()
 

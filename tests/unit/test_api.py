@@ -57,7 +57,7 @@ def mock_lifespan():
 def test_app(mock_lifespan):
     """Create a test FastAPI app with mocked lifespan and DB dependency override."""
     from src.api.server import app
-    from src.api.auth import get_current_user
+    from src.api.auth import get_user_context, UserContext
 
     app.router.lifespan_context = mock_lifespan
 
@@ -66,11 +66,11 @@ def test_app(mock_lifespan):
     async def override_get_db():
         return mock_session
 
-    async def override_auth():
-        return {"sub": "test-user"}
+    async def override_user_context():
+        return UserContext(user_id="test-user", tenant_id="default", email=None)
 
     app.dependency_overrides[get_db] = override_get_db
-    app.dependency_overrides[get_current_user] = override_auth
+    app.dependency_overrides[get_user_context] = override_user_context
 
     yield app
 
@@ -295,7 +295,9 @@ async def test_list_jobs_pagination(test_app):
             response = await client.get("/v1/jobs?limit=10&offset=5")
 
     assert response.status_code == 200
-    mock_service.list_jobs.assert_called_once_with(limit=10, offset=5)
+    mock_service.list_jobs.assert_called_once_with(
+        limit=10, offset=5, tenant_id="default"
+    )
 
 
 @pytest.mark.asyncio

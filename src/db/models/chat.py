@@ -16,6 +16,11 @@ class ChatConversation(Base):
     """A chat conversation/session."""
 
     id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     title: Mapped[str] = mapped_column(String(255), nullable=False, default="New conversation")
     model_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     temperature: Mapped[Optional[float]] = mapped_column(Float, nullable=True, default=0.7)

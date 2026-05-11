@@ -17,6 +17,9 @@ from src.db.base import Base
 # Import models to ensure they are registered with Base.metadata
 from src.db.models import ingestion
 from src.db.models import chat
+from src.db.models import tenant
+from src.db.models import user
+from src.db.models import document  # noqa: F401
 
 # get config
 config = context.config
