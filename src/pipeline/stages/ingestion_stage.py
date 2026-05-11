@@ -25,11 +25,27 @@ _EXT_TO_TYPE: Dict[str, str] = {
 
 # Filename keyword → document subtype. Order matters: the first hit wins, so
 # more specific patterns come first.
+#
+# Boundary note: ``\b`` treats ``_`` as a word character, which breaks the
+# common ``acme_invoice_001.pdf`` pattern. We use an explicit non-letter
+# boundary instead so underscores, digits, dashes, dots and the start/end of
+# the filename all separate keywords.
+_BOUNDARY_BEFORE = r"(?:^|[^A-Za-z])"
+_BOUNDARY_AFTER = r"(?:[^A-Za-z]|$)"
+
+
+def _kw(*alternatives: str) -> re.Pattern[str]:
+    return re.compile(
+        f"{_BOUNDARY_BEFORE}(?:{'|'.join(alternatives)}){_BOUNDARY_AFTER}",
+        re.IGNORECASE,
+    )
+
+
 _FILENAME_SUBTYPE_PATTERNS: list[tuple[re.Pattern[str], str]] = [
-    (re.compile(r"\binv(oice)?\b|\bbill\b", re.IGNORECASE), "invoice"),
-    (re.compile(r"\brec(eipt)?\b", re.IGNORECASE), "receipt"),
-    (re.compile(r"\bform\b|\bapplication\b|\bquestionnaire\b", re.IGNORECASE), "form"),
-    (re.compile(r"\breport\b|\bwhitepaper\b|\bmemo\b", re.IGNORECASE), "report"),
+    (_kw(r"inv(?:oice)?", r"bill"), "invoice"),
+    (_kw(r"rec(?:eipt)?"), "receipt"),
+    (_kw(r"form", r"application", r"questionnaire"), "form"),
+    (_kw(r"report", r"whitepaper", r"memo"), "report"),
 ]
 
 
