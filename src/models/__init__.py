@@ -16,8 +16,12 @@ ModelLoader.register_loader("qwen", QwenModel)
 ModelLoader.register_loader("lightonocr", LightOnOCRModel)
 
 #Register other providers
-# Re-use generic cloud loader for now
+# Re-use generic cloud loader — all providers below expose OpenAI-compatible endpoints
 ModelLoader.register_loader("openai", CloudAPIModel)
 ModelLoader.register_loader("google", CloudAPIModel)
+ModelLoader.register_loader("together", CloudAPIModel)
+ModelLoader.register_loader("fireworks", CloudAPIModel)
+ModelLoader.register_loader("openrouter", CloudAPIModel)
+ModelLoader.register_loader("deepinfra", CloudAPIModel)
 
 __all__ = ["ModelLoader", "HuggingFaceModel", "DeepSeekModel", "CloudAPIModel", "LLaVAModel", "QwenModel", "LightOnOCRModel"]

@@ -11,7 +11,13 @@ Factory + registry pattern. ModelLoader dispatches by provider string.
 5. Add config to `configs/models.yaml`
 
 ## Registered Providers
-qwen, deepseek, llava, lightonocr, openai, google
+qwen, deepseek, llava, lightonocr, openai, google, together, fireworks,
+openrouter, deepinfra
+
+Cloud providers (everything after `lightonocr`) all reuse `CloudAPIModel` —
+they speak OpenAI-compatible HTTP. To add another OpenAI-compatible provider,
+just add a `register_loader(...)` line in `__init__.py` and a YAML entry; no
+new class needed.
 
 ## Gotchas
 - **Config nesting**: quantization/max_memory live under `config["config"]`,
