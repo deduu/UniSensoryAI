@@ -28,6 +28,8 @@ from src.services.chat import ChatService
 from src.services.exceptions import NotFoundException
 from src.policy.models import PolicyReviewRequest
 from src.policy.service import PolicyReviewService
+from src.chat.composition import ChatSettings, build_chat_orchestrator
+from src.chat.service import ChatOrchestrationService
 
 # Setup structured logging
 from src.utils.logging import configure_logging, get_logger
@@ -770,19 +772,92 @@ async def review_job_policy(
 # Chat completions proxy — keeps API keys server-side
 # ---------------------------------------------------------------------------
 
+def _extract_chat_split(messages: list[dict]) -> tuple[str, list[dict]]:
+    """Split an OpenAI-style messages list into ``(latest_user, history)``.
+
+    The orchestrator works in (user_message, history) terms while the
+    frontend posts the OpenAI-style flat list. We pull the LAST user
+    message as the active turn and keep everything before it as history.
+    """
+    if not messages:
+        return "", []
+    for i in range(len(messages) - 1, -1, -1):
+        if messages[i].get("role") == "user":
+            return str(messages[i].get("content") or ""), list(messages[:i])
+    return "", list(messages)
+
+
+def _sse_openai_chunk(
+    *,
+    chunk_id: str,
+    model: str,
+    delta: dict,
+    finish_reason: str | None = None,
+) -> str:
+    """Render one OpenAI-compatible ``chat.completion.chunk`` SSE frame."""
+    import time as _time
+    payload = {
+        "id": chunk_id,
+        "object": "chat.completion.chunk",
+        "created": int(_time.time()),
+        "model": model,
+        "choices": [
+            {
+                "index": 0,
+                "delta": delta,
+                "finish_reason": finish_reason,
+            }
+        ],
+    }
+    return f"data: {json.dumps(payload)}\n\n"
+
+
+async def _legacy_proxy_stream(*, api_key: str, api_base: str, payload: dict):
+    """Original pass-through behaviour; used when ``bypass_orchestration=true``."""
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            async with client.stream(
+                "POST",
+                f"{api_base}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={**payload, "stream": True},
+            ) as resp:
+                if resp.status_code != 200:
+                    error_body = await resp.aread()
+                    yield f"data: {json.dumps({'error': error_body.decode()})}\n\n"
+                    return
+                async for chunk in resp.aiter_text():
+                    yield chunk
+    except httpx.TimeoutException:
+        yield f"data: {json.dumps({'error': 'Request timed out'})}\n\n"
+    except Exception as exc:  # noqa: BLE001
+        logger.error(f"Chat proxy error: {exc}", exc_info=True)
+        yield f"data: {json.dumps({'error': str(exc)})}\n\n"
+
+
 @app.post("/v1/chat/completions/stream")
 async def proxy_chat_stream(
     request: Request,
     user: UserContext = Depends(get_user_context),
 ):
-    """
-    Proxy OpenAI-compatible chat completions through the backend.
-    Uses OPENAI_API_KEY / OPENAI_API_BASE from .env first;
-    falls back to user-supplied keys from the request body.
+    """OpenAI-compatible chat completions, routed through orchestration.
+
+    Preserves the original request/response shape (a stream of
+    ``chat.completion.chunk`` SSE frames terminated by ``[DONE]``) while
+    internally routing through ``ChatOrchestrationService``: a
+    QueryAnalyzer classifies the turn, then either DirectAnswerer or
+    WebResearcher+Synthesizer handles it. Web sources are emitted as an
+    extra ``data: {"sources": [...]}`` frame just before ``[DONE]``.
+
+    Set ``bypass_orchestration=true`` in the request body to fall through
+    to the original pass-through proxy for debugging.
     """
     body = await request.json()
+    bypass = bool(body.get("bypass_orchestration", False))
 
-    # .env takes priority; request body is fallback
     api_key = os.getenv("OPENAI_API_KEY") or body.get("api_key", "")
     api_base = (
         os.getenv("OPENAI_API_BASE")
@@ -793,40 +868,88 @@ async def proxy_chat_stream(
     if not api_key:
         raise HTTPException(
             status_code=400,
-            detail="No OpenAI API key configured. Set OPENAI_API_KEY in .env or provide it in Settings.",
+            detail=(
+                "No OpenAI API key configured. Set OPENAI_API_KEY in .env or "
+                "provide it in Settings."
+            ),
         )
 
-    payload = {
-        "model": body.get("model", "gpt-4o"),
-        "messages": body.get("messages", []),
-        "temperature": body.get("temperature", 0.7),
-        "max_tokens": body.get("max_tokens", 4096),
-        "stream": True,
-    }
+    model = body.get("model", "gpt-4o")
+    messages = body.get("messages") or []
+
+    if bypass:
+        legacy_payload = {
+            "model": model,
+            "messages": messages,
+            "temperature": body.get("temperature", 0.7),
+            "max_tokens": body.get("max_tokens", 4096),
+        }
+        return StreamingResponse(
+            _legacy_proxy_stream(
+                api_key=api_key, api_base=api_base, payload=legacy_payload
+            ),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
+
+    user_message, history = _extract_chat_split(messages)
+    settings = ChatSettings.from_env(api_key=api_key, api_base=api_base, model=model)
+
+    try:
+        orchestrator = build_chat_orchestrator(settings=settings)
+    except ValueError as exc:
+        # E.g. search_provider="brave" without BRAVE_API_KEY. Surface as 400.
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    service = ChatOrchestrationService(orchestrator=orchestrator)
+    chunk_id = f"chatcmpl-orch-{uuid.uuid4().hex[:12]}"
 
     async def event_stream():
         try:
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                async with client.stream(
-                    "POST",
-                    f"{api_base}/chat/completions",
-                    headers={
-                        "Authorization": f"Bearer {api_key}",
-                        "Content-Type": "application/json",
-                    },
-                    json=payload,
-                ) as resp:
-                    if resp.status_code != 200:
-                        error_body = await resp.aread()
-                        yield f"data: {json.dumps({'error': error_body.decode()})}\n\n"
-                        return
-                    async for chunk in resp.aiter_text():
-                        yield chunk
-        except httpx.TimeoutException:
-            yield f"data: {json.dumps({'error': 'Request timed out'})}\n\n"
-        except Exception as e:
-            logger.error(f"Chat proxy error: {e}", exc_info=True)
-            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+            result = await service.run(
+                user_message=user_message,
+                conversation_history=history,
+                tenant_id=user.tenant_id,
+                user_id=user.user_id,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.error(f"Chat orchestration failed: {exc}", exc_info=True)
+            yield f"data: {json.dumps({'error': str(exc)})}\n\n"
+            yield "data: [DONE]\n\n"
+            return
+
+        # Role-only opener, full content next, then stop. Keeps the
+        # frontend's chunk parser happy without truly streaming tokens
+        # (real token streaming is a follow-up).
+        yield _sse_openai_chunk(
+            chunk_id=chunk_id, model=model, delta={"role": "assistant"}
+        )
+        yield _sse_openai_chunk(
+            chunk_id=chunk_id,
+            model=model,
+            delta={"content": result.response},
+        )
+        yield _sse_openai_chunk(
+            chunk_id=chunk_id, model=model, delta={}, finish_reason="stop"
+        )
+
+        sources = result.metadata.get("sources") or []
+        citations = result.metadata.get("citations") or []
+        if sources or citations:
+            yield "data: " + json.dumps(
+                {
+                    "sources": sources,
+                    "citations": citations,
+                    "query_type": result.metadata.get("query_type"),
+                    "refined_queries": result.metadata.get("refined_queries") or [],
+                }
+            ) + "\n\n"
+
+        yield "data: [DONE]\n\n"
 
     return StreamingResponse(
         event_stream(),
