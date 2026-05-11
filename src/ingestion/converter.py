@@ -204,14 +204,13 @@ class DocumentConverter:
         end_page: Optional[int] = None,
     ) -> List[Any]:
         """
-        Convert a document to a list of content chunks.
-        - For Images/PDF: Returns list of PIL Images.
-        - For Office Files: Returns list of strings (text content).
+        Convert a document to a list of content chunks (legacy path).
 
-        Args:
-            file_path: Path to the document file.
-            start_page: Optional 1-indexed start page (inclusive).
-            end_page: Optional 1-indexed end page (inclusive).
+        Returns full-page images for PDFs, PIL images for raster files, and
+        Markdown strings for Office files. Used by the legacy agents in
+        ``src/agents/`` which expect images. New code should call
+        :meth:`convert_hybrid`, which preserves the PDF text layer and only
+        renders image regions that need VLM extraction.
         """
         path = Path(file_path)
         if not path.exists():
@@ -234,6 +233,53 @@ class DocumentConverter:
             return DocumentConverter._extract_pptx(path, start_page=start_page, end_page=end_page)
         if ext == ".xlsx":
             return DocumentConverter._extract_xlsx(path, start_page=start_page, end_page=end_page)
+
+        raise ValueError(f"Unsupported file format: {ext}")
+
+    @staticmethod
+    def convert_hybrid(
+        file_path: Union[str, Path],
+        start_page: Optional[int] = None,
+        end_page: Optional[int] = None,
+    ) -> List[Any]:
+        """
+        Convert a document to content items, preserving structure where possible.
+
+        - PDFs: returns ``List[PageBundle]``. Digital pages keep their native
+          text layer; only embedded figures (and, in later phases, tables) are
+          rendered for VLM. Scanned pages fall back to full-page rendering.
+        - Raster images: returns ``[PIL.Image]`` (single full-page item).
+        - Office files: returns ``List[str]`` of Markdown — unchanged.
+
+        Args:
+            file_path: Path to the document file.
+            start_page: Optional 1-indexed start page (inclusive).
+            end_page: Optional 1-indexed end page (inclusive).
+        """
+        path = Path(file_path)
+        if not path.exists():
+            raise FileNotFoundError(f"File not found: {file_path}")
+
+        ext = path.suffix.lower()
+
+        if ext in [".png", ".jpg", ".jpeg", ".bmp", ".tiff", ".webp"]:
+            return [Image.open(path)]
+
+        if ext == ".pdf":
+            return DocumentConverter._convert_pdf_hybrid(
+                path, start_page=start_page, end_page=end_page
+            )
+
+        if ext == ".docx":
+            return DocumentConverter._extract_docx(path)
+        if ext == ".pptx":
+            return DocumentConverter._extract_pptx(
+                path, start_page=start_page, end_page=end_page
+            )
+        if ext == ".xlsx":
+            return DocumentConverter._extract_xlsx(
+                path, start_page=start_page, end_page=end_page
+            )
 
         raise ValueError(f"Unsupported file format: {ext}")
 
@@ -310,6 +356,43 @@ class DocumentConverter:
             raise
         except Exception as e:
             logger.error(f"Failed to convert PDF {path}: {e}")
+            raise
+
+    @staticmethod
+    def _convert_pdf_hybrid(
+        path: Path,
+        zoom: float = 2.0,
+        start_page: Optional[int] = None,
+        end_page: Optional[int] = None,
+    ) -> List[Any]:
+        """Extract one ``PageBundle`` per page, honouring start/end_page."""
+        from src.ingestion.pdf_hybrid import extract_page_bundle
+
+        logger.info("Hybrid conversion of PDF %s...", path.name)
+        try:
+            doc = fitz.open(path)
+            total_pages = len(doc)
+            start_idx, end_idx = DocumentConverter._resolve_page_range(
+                total_pages, start_page, end_page, item_label="page"
+            )
+            logger.info(
+                "Hybrid: pages %d–%d of %d total.",
+                start_idx + 1,
+                end_idx,
+                total_pages,
+            )
+
+            bundles: List[Any] = []
+            for page_num in range(start_idx, end_idx):
+                page = doc.load_page(page_num)
+                bundle = extract_page_bundle(page, page_no=page_num + 1, zoom=zoom)
+                bundles.append(bundle)
+            doc.close()
+            return bundles
+        except ValueError:
+            raise
+        except Exception as e:
+            logger.error(f"Failed hybrid conversion of PDF {path}: {e}")
             raise
 
     @staticmethod

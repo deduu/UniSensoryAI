@@ -25,6 +25,7 @@ from PIL import Image
 
 from src.inference.concurrency import reset_registry
 from src.inference.result_cache import reset_cache
+from src.pipeline.prompts import reset_prompts
 from src.pipeline.stages.inference_stage import InferenceStage
 
 
@@ -61,9 +62,11 @@ def _fake_config(provider: str = "openai", concurrency: int = 4):
 def _reset_state():
     reset_cache()
     reset_registry()
+    reset_prompts()
     yield
     reset_cache()
     reset_registry()
+    reset_prompts()
 
 
 @pytest.mark.asyncio
@@ -259,3 +262,124 @@ async def test_validate_input_requires_content_and_model():
     assert (
         stage.validate_input({"content_items": ["x"], "model_id": "m"}) is True
     )
+
+
+# ---------------------------------------------------------------------------
+# PageBundle handling (Phase 2)
+# ---------------------------------------------------------------------------
+
+
+def _make_bundle(text: str = "", regions=(), full_page=None, needs_full=False):
+    from src.ingestion.pdf_hybrid import PageBundle
+    return PageBundle(
+        page_no=1,
+        text_layer=text,
+        image_regions=list(regions),
+        full_page_image=full_page,
+        needs_full_page_vlm=needs_full,
+    )
+
+
+def _make_region(color: str = "yellow"):
+    from src.ingestion.pdf_hybrid import RegionImage
+    return RegionImage(
+        image=Image.new("RGB", (8, 8), color=color),
+        region_type="figure",
+        bbox=(0.0, 0.0, 10.0, 10.0),
+    )
+
+
+@pytest.mark.asyncio
+async def test_pagebundle_text_only_skips_vlm():
+    """A digital PDF page with no figures passes its text through verbatim."""
+    model = _RecordingModel()
+    stage = InferenceStage()
+    bundle = _make_bundle(text="Page one body text.")
+    ctx = {"model_id": "m", "content_items": [bundle]}
+
+    async def fake_loader(*_a, **_kw):
+        return model
+
+    with patch("src.ingestion.processor.get_cached_model", fake_loader), patch(
+        "src.inference.concurrency.ConfigLoader.get_model_config",
+        return_value=_fake_config(),
+    ):
+        result = await stage.execute(ctx)
+
+    assert result["raw_results"] == ["Page one body text."]
+    assert model.calls == []
+
+
+@pytest.mark.asyncio
+async def test_pagebundle_scanned_page_uses_full_page_vlm():
+    """A scanned page (no text layer) routes the full-page image to the VLM."""
+    model = _RecordingModel()
+    stage = InferenceStage()
+    bundle = _make_bundle(
+        text="",
+        full_page=Image.new("RGB", (16, 16), color="white"),
+        needs_full=True,
+    )
+    ctx = {"model_id": "m", "content_items": [bundle]}
+
+    async def fake_loader(*_a, **_kw):
+        return model
+
+    with patch("src.ingestion.processor.get_cached_model", fake_loader), patch(
+        "src.inference.concurrency.ConfigLoader.get_model_config",
+        return_value=_fake_config(),
+    ):
+        result = await stage.execute(ctx)
+
+    assert len(model.calls) == 1
+    assert "page-1" in result["raw_results"][0]
+
+
+@pytest.mark.asyncio
+async def test_pagebundle_text_plus_region_combines_outputs():
+    """Text passes through, figure region adds its own VLM extraction."""
+    model = _RecordingModel()
+    stage = InferenceStage()
+    bundle = _make_bundle(
+        text="Body of page two.",
+        regions=[_make_region("red")],
+    )
+    ctx = {"model_id": "m", "content_items": [bundle]}
+
+    async def fake_loader(*_a, **_kw):
+        return model
+
+    with patch("src.ingestion.processor.get_cached_model", fake_loader), patch(
+        "src.inference.concurrency.ConfigLoader.get_model_config",
+        return_value=_fake_config(),
+    ):
+        result = await stage.execute(ctx)
+
+    out = result["raw_results"][0]
+    assert "Body of page two." in out
+    assert "<!-- figure -->" in out
+    assert len(model.calls) == 1  # one call per region, none for the text
+
+
+@pytest.mark.asyncio
+async def test_subtype_selects_per_type_prompt():
+    """document_subtype="invoice" must surface as the prompt sent to the VLM."""
+    model = _RecordingModel()
+    stage = InferenceStage()
+    bundle = _make_bundle(text="", needs_full=True, full_page=Image.new("RGB", (8, 8), color="gray"))
+    ctx = {"model_id": "m", "document_subtype": "invoice", "content_items": [bundle]}
+
+    async def fake_loader(*_a, **_kw):
+        return model
+
+    with patch("src.ingestion.processor.get_cached_model", fake_loader), patch(
+        "src.inference.concurrency.ConfigLoader.get_model_config",
+        return_value=_fake_config(),
+    ):
+        await stage.execute(ctx)
+
+    assert len(model.calls) == 1
+    sent_prompt = model.calls[0]["prompt"].lower()
+    # configs/prompts.yaml ships an invoice prompt; it must mention invoice
+    # concepts. The generic prompt would not.
+    assert "invoice" in sent_prompt or "line item" in sent_prompt

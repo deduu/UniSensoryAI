@@ -1,0 +1,67 @@
+# VLM prompt registry — keyed by {document_subtype}.{region_type}.
+#
+# Resolution order in src/pipeline/prompts.py:
+#   1. exact match on "{subtype}.{region_type}"
+#   2. fall back to "generic.{region_type}"
+#   3. fall back to a built-in faithfulness prompt
+#
+# region_type values used today: "page", "figure", "table"
+
+prompts:
+  # ----------------------------------------------------------------- generic
+  generic:
+    page: |
+      Convert the visible document page into faithful Markdown. Transcribe every
+      word, number, heading, table cell, label, checkbox, and footnote exactly as
+      written. Preserve the original structure using Markdown headings, paragraphs,
+      lists, and tables. Do not summarize, paraphrase, interpret, or omit content.
+      Output only the Markdown extraction.
+    figure: |
+      Describe this figure faithfully. If the figure contains text (titles, axis
+      labels, legends, captions, callouts), transcribe every word exactly. If the
+      figure is a chart, describe the type (bar, line, scatter, etc.), the axes,
+      and the visible trend. Do not infer values that are not explicitly shown.
+      Output Markdown only.
+    table: |
+      Extract this table as a GitHub-flavored Markdown table. Preserve column
+      order and header row. Use the exact cell text as shown. If a cell is
+      empty, output an empty cell. Do not invent column names or values.
+
+  # ----------------------------------------------------------------- invoice
+  invoice:
+    page: |
+      Convert this invoice page into faithful Markdown. Capture the vendor name
+      and address, the bill-to party, invoice number, invoice date, due date,
+      every line item (description, quantity, unit price, line total), subtotals,
+      taxes, discounts, shipping, and grand total. Transcribe currency symbols
+      and amounts exactly. Do not interpret, summarize, or omit any field.
+      Output only the Markdown extraction.
+    table: |
+      Extract this invoice line-item table as a GitHub-flavored Markdown table.
+      Columns must reflect what is shown — typically description, quantity,
+      unit price, and line total. Preserve the exact cell text and number
+      formatting. Do not infer missing columns.
+
+  # ----------------------------------------------------------------- receipt
+  receipt:
+    page: |
+      Convert this receipt into faithful Markdown. Capture merchant name and
+      address, date and time, every line item with its price, subtotal, tax
+      breakdown, total, tip if present, and payment method. Transcribe
+      amounts exactly. Do not summarize.
+
+  # -------------------------------------------------------------------- form
+  form:
+    page: |
+      Convert this form into faithful Markdown. For each field, render as
+      "Label: Value" on its own line. For checkboxes and radio buttons, write
+      "[x] Option" for checked and "[ ] Option" for unchecked. Preserve section
+      headings and the order of fields. Do not skip blank fields — show them
+      as "Label: ".
+
+  # ------------------------------------------------------------------ report
+  report:
+    page: |
+      Convert this report page into faithful Markdown. Preserve headings,
+      paragraphs, lists, footnotes, and tables exactly. Do not summarize or
+      paraphrase. Output only the Markdown extraction.
