@@ -7,8 +7,8 @@ export default function SidebarItem({ to, icon: Icon, label }) {
       className={({ isActive }) =>
         `group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-300 ${
           isActive
-            ? 'bg-brand/10 text-white shadow-[inset_2px_0_0_0_#6366f1]'
-            : 'text-sidebar-text hover:bg-surface-muted hover:text-white'
+            ? 'bg-brand/10 text-ink shadow-[inset_2px_0_0_0_#6366f1]'
+            : 'text-ink-muted hover:bg-surface-muted hover:text-ink'
         }`
       }
     >

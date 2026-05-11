@@ -66,7 +66,7 @@ function CodeBlock({ children, className, ...props }) {
 
 export default function MarkdownRenderer({ content }) {
   return (
-    <div className="prose prose-invert prose-sm max-w-none 
+    <div className="prose prose-sm dark:prose-invert max-w-none
                     prose-headings:text-ink prose-headings:font-semibold
                     prose-p:text-ink/90 prose-p:leading-relaxed
                     prose-a:text-brand-hover prose-a:no-underline hover:prose-a:underline

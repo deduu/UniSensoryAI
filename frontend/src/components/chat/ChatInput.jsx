@@ -31,7 +31,7 @@ export default function ChatInput({
   )
 
   return (
-    <div className="border-t border-surface-border/50 bg-surface/30 backdrop-blur-sm p-4">
+    <div className="shrink-0 bg-surface/30 backdrop-blur-sm p-4">
       <div className="relative flex items-end gap-3 rounded-2xl border border-surface-border bg-surface-muted/50 px-4 py-3 
                       focus-within:border-brand/40 focus-within:shadow-[0_0_15px_rgba(99,102,241,0.1)] transition-all duration-300">
         {/* Doc count indicator */}

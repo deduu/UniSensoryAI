@@ -1,5 +1,5 @@
 ﻿import { useEffect, useState } from 'react'
-import { CheckCircle2 } from 'lucide-react'
+import { CheckCircle2, Moon, Sun } from 'lucide-react'
 import Tabs from '../components/ui/Tabs'
 import Card from '../components/ui/Card'
 import Button from '../components/ui/Button'
@@ -75,6 +75,50 @@ function ConnectionTab() {
           {result.error && <p className="mt-1 text-xs text-red-600">{result.error}</p>}
         </div>
       )}
+    </Card>
+  )
+}
+
+function AppearanceTab() {
+  const { theme, setTheme } = useSettings()
+
+  const options = [
+    { value: 'light', label: 'Light', icon: Sun, description: 'White surfaces, dark text. The default for Intelidoc.' },
+    { value: 'dark',  label: 'Dark',  icon: Moon, description: 'Deep dark surfaces, light text. Easier on the eyes at night.' },
+  ]
+
+  return (
+    <Card className="max-w-xl p-6">
+      <h3 className="text-sm font-semibold text-ink">Theme</h3>
+      <p className="mt-1 text-xs text-ink-muted">
+        Choose how Intelidoc looks. Your preference is saved to this browser.
+      </p>
+
+      <div className="mt-5 grid grid-cols-2 gap-3">
+        {options.map((opt) => {
+          const Icon = opt.icon
+          const active = theme === opt.value
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => setTheme(opt.value)}
+              className={`flex flex-col items-start gap-2 rounded-xl border px-4 py-3 text-left transition-all ${
+                active
+                  ? 'border-brand/40 bg-brand/10 shadow-[0_0_15px_rgba(99,102,241,0.10)]'
+                  : 'border-surface-border bg-surface-muted/30 hover:border-brand/20 hover:bg-surface-muted/50'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <Icon className={`h-4 w-4 ${active ? 'text-brand-hover' : 'text-ink-muted'}`} />
+                <span className={`text-sm font-medium ${active ? 'text-ink' : 'text-ink-muted'}`}>{opt.label}</span>
+                {active && <CheckCircle2 className="ml-auto h-3.5 w-3.5 text-brand-hover" />}
+              </div>
+              <p className="text-[11px] text-ink-faint">{opt.description}</p>
+            </button>
+          )
+        })}
+      </div>
     </Card>
   )
 }
@@ -210,6 +254,7 @@ export default function Settings() {
         tabs={[
           { key: 'connection', label: 'Connection', content: <ConnectionTab /> },
           { key: 'api_keys', label: 'API Keys', content: <ApiKeysTab /> },
+          { key: 'appearance', label: 'Appearance', content: <AppearanceTab /> },
           { key: 'about', label: 'About', content: <AboutTab /> },
         ]}
       />

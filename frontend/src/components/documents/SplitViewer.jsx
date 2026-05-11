@@ -13,6 +13,7 @@ import {
   FileText,
   Hash,
   MessageSquare,
+  Plus,
   RotateCcw,
   Search,
   Trash2,
@@ -23,11 +24,20 @@ import {
 import ReactMarkdown from 'react-markdown'
 import { useNavigate } from 'react-router-dom'
 import remarkGfm from 'remark-gfm'
+import { Document, Page, pdfjs } from 'react-pdf'
+import 'react-pdf/dist/Page/AnnotationLayer.css'
+import 'react-pdf/dist/Page/TextLayer.css'
 import { deleteJob, retryJob } from '../../api/jobs'
 import { useApp } from '../../context/AppContext'
 import { useJobs } from '../../context/JobContext'
 import PolicyReviewPanel from './PolicyReviewPanel'
 import Badge from '../ui/Badge'
+
+// Vite-bundled pdf.js worker — required by react-pdf so parsing happens off the main thread.
+pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.min.mjs',
+  import.meta.url,
+).toString()
 
 const TABS = [
   { key: 'content', label: 'Content' },
@@ -135,7 +145,59 @@ function injectHighlightsIntoHtml(html, clauses, zoom = 100) {
   )
 }
 
-function OriginalPreview({ doc, backendUrl, policyReview }) {
+// react-pdf renders each page as a <canvas> inside our DOM, so the host page
+// can observe and drive scroll position — unlike a browser-native PDF iframe.
+function PdfViewer({ src, zoom, scrollRef, fileLabel }) {
+  const [numPages, setNumPages] = useState(0)
+  const [pageWidth, setPageWidth] = useState(800)
+  const containerRef = useRef(null)
+
+  // Measure the container width so pages render at the right size for the
+  // current split width. Re-measure on resize.
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return undefined
+    const update = () => {
+      const w = el.clientWidth
+      if (w > 0) setPageWidth(Math.max(320, w - 32))
+    }
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  const setRefs = useCallback((node) => {
+    containerRef.current = node
+    if (typeof scrollRef === 'function') scrollRef(node)
+    else if (scrollRef) scrollRef.current = node
+  }, [scrollRef])
+
+  return (
+    <div ref={setRefs} className="h-full w-full overflow-auto bg-surface-subtle/40 px-4 py-4">
+      <Document
+        file={src}
+        onLoadSuccess={({ numPages: n }) => setNumPages(n)}
+        loading={<div className="py-12 text-center text-sm text-ink-muted">Loading PDF…</div>}
+        error={<div className="py-12 text-center text-sm text-red-400">Failed to render PDF.</div>}
+        className="flex flex-col items-center gap-4"
+      >
+        {Array.from({ length: numPages }, (_, i) => (
+          <Page
+            key={`${fileLabel}-${i + 1}`}
+            pageNumber={i + 1}
+            width={pageWidth * (zoom / 100)}
+            renderAnnotationLayer={false}
+            renderTextLayer
+            className="shadow-card"
+          />
+        ))}
+      </Document>
+    </div>
+  )
+}
+
+function OriginalPreview({ doc, backendUrl, policyReview, scrollRef }) {
   const [state, setState] = useState('loading')
   const [objectUrl, setObjectUrl] = useState(null)
   const [htmlPreview, setHtmlPreview] = useState('')
@@ -302,10 +364,6 @@ function OriginalPreview({ doc, backendUrl, policyReview }) {
   }
 
   if (ext === 'pdf') {
-    const fragmentParams = [`zoom=${zoom}`]
-    if (startPage) fragmentParams.push(`page=${startPage}`)
-    if (firstContradictionText) fragmentParams.push(`search=${encodeURIComponent(firstContradictionText.slice(0, 96))}`)
-    const pdfSrc = `${objectUrl}#${fragmentParams.join('&')}`
     return (
       <div className="flex h-full flex-col overflow-hidden">
         <div className="flex shrink-0 items-center justify-between border-b border-surface-border bg-surface/80 px-3 py-2">
@@ -319,7 +377,9 @@ function OriginalPreview({ doc, backendUrl, policyReview }) {
             Showing full original document. Extraction was limited to pages {startPage ?? 1}–{endPage ?? '?'}.
           </div>
         )}
-        <iframe src={pdfSrc} className="min-h-0 flex-1 w-full border-0" title={doc.filename || 'Original document'} />
+        <div className="min-h-0 flex-1">
+          <PdfViewer src={objectUrl} zoom={zoom} scrollRef={scrollRef} fileLabel={doc.filename || 'pdf'} />
+        </div>
       </div>
     )
   }
@@ -330,7 +390,7 @@ function OriginalPreview({ doc, backendUrl, policyReview }) {
         <span className="text-xs text-ink-faint">Original image</span>
         {zoomControls}
       </div>
-      <div className="min-h-0 flex-1 overflow-auto bg-surface-subtle/40 p-6">
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto bg-surface-subtle/40 p-6">
         <div className="flex min-h-full items-center justify-center">
           <img
             src={objectUrl}
@@ -353,7 +413,7 @@ function ContentTab({ doc }) {
 
   return (
     <div className="px-6 py-5">
-      <div className="prose prose-invert prose-sm max-w-none prose-headings:text-ink prose-p:text-ink-muted prose-strong:text-ink prose-a:text-brand prose-code:text-cyan-200 prose-pre:border prose-pre:border-surface-border prose-pre:bg-surface-muted">
+      <div className="prose prose-sm dark:prose-invert max-w-none prose-headings:text-ink prose-p:text-ink-muted prose-strong:text-ink prose-a:text-brand prose-code:text-brand dark:prose-code:text-cyan-200 prose-pre:border prose-pre:border-surface-border prose-pre:bg-surface-muted">
         <ReactMarkdown remarkPlugins={[remarkGfm]}>
           {content}
         </ReactMarkdown>
@@ -403,7 +463,7 @@ function RawTab({ doc }) {
   )
 }
 
-export default function SplitViewer({ doc, documents = [], isOpen, onClose, onSelectDoc }) {
+export default function SplitViewer({ doc, documents = [], isOpen, onClose, onSelectDoc, onStartNewExtraction }) {
   const { backendUrl } = useApp()
   const { jobs, updateJob, removeJob } = useJobs()
   const navigate = useNavigate()
@@ -628,6 +688,17 @@ export default function SplitViewer({ doc, documents = [], isOpen, onClose, onSe
             <Files className="h-3.5 w-3.5" />
             Documents
           </button>
+          {onStartNewExtraction && (
+            <button
+              type="button"
+              onClick={onStartNewExtraction}
+              title="Close viewer and start a new extraction"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-brand/25 bg-brand/10 px-2.5 py-1.5 text-xs font-semibold text-brand transition-colors hover:bg-brand/20"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              New extraction
+            </button>
+          )}
         </div>
 
         <div className="flex min-w-0 flex-1 items-center gap-1.5">
@@ -802,8 +873,13 @@ export default function SplitViewer({ doc, documents = [], isOpen, onClose, onSe
                   <span className="hidden truncate text-xs text-ink-faint lg:inline">{doc.filename || displayName}</span>
                 </div>
               </div>
-              <div ref={setLeftScrollEl} className="flex-1 overflow-hidden bg-surface-subtle/20">
-                <OriginalPreview doc={doc} backendUrl={backendUrl} policyReview={activePolicyReview} />
+              <div className="flex-1 min-h-0 overflow-hidden bg-surface-subtle/20">
+                <OriginalPreview
+                  doc={doc}
+                  backendUrl={backendUrl}
+                  policyReview={activePolicyReview}
+                  scrollRef={setLeftScrollEl}
+                />
               </div>
             </section>
             <div onMouseDown={onDividerMouseDown} className={`split-divider-handle hidden lg:block ${isDraggingDivider ? 'is-dragging' : ''}`} />

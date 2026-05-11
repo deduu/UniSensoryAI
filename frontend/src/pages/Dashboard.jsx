@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback } from 'react'
+import { useEffect, useRef, useState, useMemo, useCallback } from 'react'
 import {
   FileUp,
   Search,
@@ -14,11 +14,13 @@ import BulkActionsBar from '../components/documents/BulkActionsBar'
 import Pagination from '../components/documents/Pagination'
 import EmptyState from '../components/ui/EmptyState'
 import Button from '../components/ui/Button'
+import DropZone from '../components/upload/DropZone'
 import { useFileUpload } from '../hooks/useFileUpload'
 import { useJobPolling } from '../hooks/useJobPolling'
 import { useDocuments } from '../hooks/useDocuments'
 import { useJobs } from '../context/JobContext'
 import { useApp } from '../context/AppContext'
+import { useToast } from '../context/ToastContext'
 import { deleteJob } from '../api/jobs'
 import { AVAILABLE_MODELS } from '../api/models'
 
@@ -50,11 +52,9 @@ function ExtractionControlCard({
       <div className="flex items-start gap-4 px-4 pt-4 pb-3 border-b border-surface-border/60">
         <div className="flex-1 min-w-0">
           {files.length === 0 ? (
-            <div className="flex min-h-9 items-center rounded-lg border border-surface-border bg-surface-muted/40 px-3 text-xs text-ink-faint">
-              Files selected from the upload panel will appear here.
-            </div>
+            <DropZone onFiles={addFiles} compact className="w-full justify-center py-2.5" />
           ) : (
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap items-center gap-1.5">
               {files.map((f, i) => (
                 <span
                   key={`${f.name}-${i}`}
@@ -73,6 +73,10 @@ function ExtractionControlCard({
                   )}
                 </span>
               ))}
+              {/* Add-more affordance when files are already queued */}
+              {state === STATES.FILES_SELECTED && (
+                <DropZone onFiles={addFiles} compact />
+              )}
             </div>
           )}
         </div>
@@ -237,6 +241,7 @@ export default function Dashboard() {
   const navigate = useNavigate()
   const { jobs, removeJob } = useJobs()
   const { backendUrl } = useApp()
+  const toast = useToast()
   const { documents, allDocuments, search, setSearch, typeFilter, setTypeFilter } = useDocuments()
 
   // Upload state
@@ -269,29 +274,74 @@ export default function Dashboard() {
     document.title = 'Dashboard — Intelidoc'
   }, [])
 
-  // Auto-open completed job in full viewer
+  // Toast on upload error (failed before backend even saw it).
+  const notifiedUploadErrorRef = useRef(null)
   useEffect(() => {
-    if (state === STATES.DONE) {
-      const timer = setTimeout(() => {
-        reset()
-        setStartPage('')
-        setEndPage('')
-        const job = jobs.find((j) => j.job_id === lastJobId)
-        if (job?.documents?.length) {
-          const doc = {
-            ...job.documents[0],
-            job_id: job.job_id,
-            model_id: job.model_id,
-            job_status: job.status,
-            created_at: job.created_at,
-          }
-          setActiveDoc(doc)
-          setMode('review')
-        }
-      }, 1500)
-      return () => clearTimeout(timer)
+    if (
+      state === STATES.ERROR &&
+      lastJobId &&
+      notifiedUploadErrorRef.current !== lastJobId
+    ) {
+      notifiedUploadErrorRef.current = lastJobId
+      toast.error(error || 'Upload failed. Please try again.', { title: 'Upload failed' })
     }
-  }, [state, reset, STATES, jobs, lastJobId])
+  }, [state, STATES, lastJobId, error, toast])
+
+  // Clear the upload form once upload finishes so the user can queue another
+  // doc immediately. (We notify them about job completion separately, below.)
+  const clearedFormRef = useRef(null)
+  useEffect(() => {
+    if (state === STATES.DONE && lastJobId && clearedFormRef.current !== lastJobId) {
+      clearedFormRef.current = lastJobId
+      reset()
+      setStartPage('')
+      setEndPage('')
+    }
+  }, [state, STATES, lastJobId, reset])
+
+  // Toast when the BACKEND finishes — we watch jobs for the matching job to
+  // enter a terminal status with documents populated. This is more reliable
+  // than tying the toast to the upload state (the backend extraction happens
+  // asynchronously after upload).
+  const notifiedJobsRef = useRef(new Set())
+  useEffect(() => {
+    for (const job of jobs) {
+      if (notifiedJobsRef.current.has(job.job_id)) continue
+      const isTerminalSuccess = job.status === 'completed' && job.documents?.length
+      const isTerminalFailure = job.status === 'failed'
+      if (!isTerminalSuccess && !isTerminalFailure) continue
+      notifiedJobsRef.current.add(job.job_id)
+
+      // Skip toasts for pre-existing jobs loaded on page mount — we only want
+      // to notify about jobs that completed *during* this session.
+      const ageMs = job.created_at ? Date.now() - new Date(job.created_at).getTime() : Infinity
+      if (ageMs > 5 * 60 * 1000) continue
+
+      if (isTerminalFailure) {
+        toast.error(`"${job.filename || 'Document'}" failed to extract.`, {
+          title: 'Extraction failed',
+        })
+      } else {
+        toast.success(`"${job.filename || 'Document'}" is ready to view.`, {
+          title: 'Extraction complete',
+          action: {
+            label: 'View',
+            onClick: () => {
+              const doc = {
+                ...job.documents[0],
+                job_id: job.job_id,
+                model_id: job.model_id,
+                job_status: job.status,
+                created_at: job.created_at,
+              }
+              setActiveDoc(doc)
+              setMode('review')
+            },
+          },
+        })
+      }
+    }
+  }, [jobs, toast])
 
   // Reset page when filters change
   useEffect(() => {
@@ -322,9 +372,11 @@ export default function Dashboard() {
     upload(modelId, sp, ep)
   }
 
+  // Single click on a row fills the side panel with preview. To expand into
+  // the full SplitViewer, user clicks the eye icon (row hover action) or the
+  // "Open preview" button in the side panel — handleOpenPreview.
   const handleSelectDoc = useCallback((doc) => {
     setActiveDoc(doc)
-    setMode('review')
   }, [])
 
   const handleOpenPreview = useCallback((doc) => {
@@ -335,6 +387,16 @@ export default function Dashboard() {
   const handleCloseViewer = useCallback(() => {
     setMode('dashboard')
   }, [])
+
+  // "Start new extraction" — clears active doc and upload state so the user
+  // can drop fresh files. Used from both the side panel and the SplitViewer.
+  const handleStartNewExtraction = useCallback(() => {
+    setActiveDoc(null)
+    setMode('dashboard')
+    reset()
+    setStartPage('')
+    setEndPage('')
+  }, [reset])
 
   const handleChat = useCallback(
     (doc) => {
@@ -408,6 +470,7 @@ export default function Dashboard() {
             isOpen
             onClose={handleCloseViewer}
             onSelectDoc={setActiveDoc}
+            onStartNewExtraction={handleStartNewExtraction}
           />
         </div>
       ) : (
@@ -506,6 +569,7 @@ export default function Dashboard() {
           onChat={handleChat}
           onDownload={handleDownloadDoc}
           onDelete={handleDeleteDoc}
+          onStartNewExtraction={handleStartNewExtraction}
           processingJobs={jobs.filter((j) =>
             j.status === 'processing' || j.status === 'pending' || j.status === 'queued'
           )}

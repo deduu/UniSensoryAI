@@ -4,12 +4,15 @@ import {
   LayoutDashboard,
   LogOut,
   MessageSquare,
+  Moon,
   Settings,
+  Sun,
   User,
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import SidebarItem from './SidebarItem'
+import { useSettings } from '../../context/SettingsContext'
 
 const NAV_ITEMS = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -20,6 +23,8 @@ const NAV_ITEMS = [
 export default function Sidebar() {
   const [accountOpen, setAccountOpen] = useState(false)
   const accountRef = useRef(null)
+  const { theme, toggleTheme } = useSettings()
+  const isDark = theme === 'dark'
 
   useEffect(() => {
     if (!accountOpen) return undefined
@@ -40,13 +45,13 @@ export default function Sidebar() {
   }, [accountOpen])
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-30 flex w-64 flex-col bg-surface-glass backdrop-blur-xl border-r border-surface-border transition-all duration-300">
-      <div className="flex h-16 items-center gap-3 px-5 border-b border-surface-border/50">
+    <aside className="fixed inset-y-0 left-0 z-30 flex w-64 flex-col bg-surface-glass backdrop-blur-xl transition-all duration-300">
+      <div className="flex h-16 items-center gap-3 px-5 bg-surface/20">
         <div className="relative flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-brand to-cyan-400 text-white font-bold text-sm shadow-[0_0_15px_rgba(99,102,241,0.5)]">
           I
           <div className="absolute inset-0 rounded-xl bg-white/20 blur-sm mix-blend-overlay" />
         </div>
-        <span className="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-white to-white/70 tracking-tight">
+        <span className="text-lg font-bold text-ink tracking-tight">
           Intelidoc
         </span>
       </div>
@@ -57,7 +62,7 @@ export default function Sidebar() {
         ))}
       </nav>
 
-      <div ref={accountRef} className="relative border-t border-surface-border/50 bg-surface/30 p-3 backdrop-blur-sm">
+      <div ref={accountRef} className="relative bg-surface/30 p-3 backdrop-blur-sm">
         {accountOpen && (
           <div className="absolute bottom-full left-3 right-3 mb-2 overflow-hidden rounded-xl border border-surface-border bg-surface shadow-card">
             <div className="px-3 py-3">
@@ -65,6 +70,14 @@ export default function Sidebar() {
               <p className="mt-1 text-[11px] text-ink-faint">Account actions</p>
             </div>
             <div className="border-t border-surface-border/70 p-1.5">
+              <button
+                type="button"
+                onClick={() => { toggleTheme(); setAccountOpen(false) }}
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-ink-muted transition-colors hover:bg-surface-subtle hover:text-ink"
+              >
+                {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+                {isDark ? 'Light mode' : 'Dark mode'}
+              </button>
               <Link
                 to="/settings"
                 onClick={() => setAccountOpen(false)}

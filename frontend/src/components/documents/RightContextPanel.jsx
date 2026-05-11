@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { Eye, MessageSquare, Download, Trash2, Loader2, Upload, X as XIcon } from 'lucide-react'
+import { useState } from 'react'
+import { Eye, MessageSquare, Download, Trash2, Loader2, Upload, Plus } from 'lucide-react'
 import Badge from '../ui/Badge'
 import DropZone from '../upload/DropZone'
 
@@ -72,7 +72,14 @@ function UploadPanel({ onFiles }) {
 
 // ─── Document Preview Panel ───────────────────────────────────────────────────
 
-function DocumentPreviewPanel({ doc, onOpenPreview, onChat, onDownload, onDelete, onUploadMore }) {
+function DocumentPreviewPanel({
+  doc,
+  onOpenPreview,
+  onChat,
+  onDownload,
+  onDelete,
+  onStartNewExtraction,
+}) {
   const [confirmDelete, setConfirmDelete] = useState(false)
 
   const ext = getExt(doc.filename)
@@ -100,11 +107,23 @@ function DocumentPreviewPanel({ doc, onOpenPreview, onChat, onDownload, onDelete
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
+      {/* Header — preview label + persistent "New" pill so user can always start fresh */}
       <div className="shrink-0 px-4 py-3.5 border-b border-surface-border">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-ink-faint mb-1.5">
-          Document preview
-        </p>
+        <div className="flex items-start justify-between gap-2 mb-1.5">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-ink-faint">
+            Document preview
+          </p>
+          {onStartNewExtraction && (
+            <button
+              onClick={onStartNewExtraction}
+              title="Clear preview and start a new extraction"
+              className="inline-flex items-center gap-1 rounded-md border border-brand/25 bg-brand/10 px-2 py-0.5 text-[10px] font-semibold text-brand hover:bg-brand/20 transition-colors"
+            >
+              <Plus className="h-3 w-3" />
+              New
+            </button>
+          )}
+        </div>
         <p className="text-sm font-semibold text-ink truncate">{displayName}</p>
         {internalId && (
           <p className="text-[11px] text-ink-faint font-mono mt-0.5 truncate" title={doc.id || doc.job_id}>
@@ -144,47 +163,49 @@ function DocumentPreviewPanel({ doc, onOpenPreview, onChat, onDownload, onDelete
         )}
       </div>
 
-      {/* Actions */}
+      {/* Actions — primary (filled brand) > secondary (ghost) > destructive */}
       <div className="shrink-0 p-4 pt-3 border-t border-surface-border space-y-1.5">
-        <button
-          onClick={onUploadMore}
-          className="w-full flex items-center gap-2.5 rounded-xl bg-white/[0.03] border border-surface-border px-3 py-2 text-sm font-medium text-ink-muted hover:bg-white/[0.06] hover:text-ink transition-colors"
-        >
-          <Upload className="h-3.5 w-3.5 shrink-0" />
-          Upload new document
-        </button>
+        {/* Primary — most likely next action */}
         <button
           onClick={() => onOpenPreview(doc)}
-          className="w-full flex items-center gap-2.5 rounded-xl bg-brand/10 border border-brand/20 px-3 py-2 text-sm font-medium text-brand hover:bg-brand/20 transition-colors"
+          className="w-full flex items-center justify-center gap-2 rounded-xl bg-brand px-3 py-2.5 text-sm font-semibold text-white shadow-glow hover:bg-brand-hover transition-colors"
         >
           <Eye className="h-3.5 w-3.5 shrink-0" />
           Open preview
         </button>
-        <button
-          onClick={() => onChat(doc)}
-          className="w-full flex items-center gap-2.5 rounded-xl bg-white/[0.03] border border-surface-border px-3 py-2 text-sm font-medium text-ink-muted hover:bg-white/[0.06] hover:text-ink transition-colors"
-        >
-          <MessageSquare className="h-3.5 w-3.5 shrink-0" />
-          Chat with document
-        </button>
-        <button
-          onClick={() => onDownload(doc)}
-          className="w-full flex items-center gap-2.5 rounded-xl bg-white/[0.03] border border-surface-border px-3 py-2 text-sm font-medium text-ink-muted hover:bg-white/[0.06] hover:text-ink transition-colors"
-        >
-          <Download className="h-3.5 w-3.5 shrink-0" />
-          Download text
-        </button>
-        <button
-          onClick={handleDeleteClick}
-          className={`w-full flex items-center gap-2.5 rounded-xl border px-3 py-2 text-sm font-medium transition-colors ${
-            confirmDelete
-              ? 'bg-red-400/10 border-red-400/30 text-red-400 animate-pulse'
-              : 'bg-white/[0.03] border-surface-border text-ink-faint hover:bg-red-400/10 hover:border-red-400/20 hover:text-red-400'
-          }`}
-        >
-          <Trash2 className="h-3.5 w-3.5 shrink-0" />
-          {confirmDelete ? 'Click again to confirm' : 'Delete'}
-        </button>
+
+        {/* Secondary — common follow-ups */}
+        <div className="grid grid-cols-2 gap-1.5">
+          <button
+            onClick={() => onChat(doc)}
+            className="flex items-center justify-center gap-1.5 rounded-xl bg-white/[0.03] border border-surface-border px-3 py-2 text-xs font-medium text-ink-muted hover:bg-white/[0.06] hover:text-ink transition-colors"
+          >
+            <MessageSquare className="h-3.5 w-3.5 shrink-0" />
+            Chat
+          </button>
+          <button
+            onClick={() => onDownload(doc)}
+            className="flex items-center justify-center gap-1.5 rounded-xl bg-white/[0.03] border border-surface-border px-3 py-2 text-xs font-medium text-ink-muted hover:bg-white/[0.06] hover:text-ink transition-colors"
+          >
+            <Download className="h-3.5 w-3.5 shrink-0" />
+            Download
+          </button>
+        </div>
+
+        {/* Destructive — separated by divider so it can't be hit by accident */}
+        <div className="pt-1.5 mt-1.5 border-t border-surface-border/60">
+          <button
+            onClick={handleDeleteClick}
+            className={`w-full flex items-center justify-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-medium transition-colors ${
+              confirmDelete
+                ? 'bg-red-400/10 border-red-400/30 text-red-400 animate-pulse'
+                : 'border-transparent text-ink-faint hover:bg-red-400/10 hover:border-red-400/20 hover:text-red-400'
+            }`}
+          >
+            <Trash2 className="h-3 w-3 shrink-0" />
+            {confirmDelete ? 'Click again to confirm' : 'Delete'}
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -312,19 +333,12 @@ export default function RightContextPanel({
   onChat,
   onDownload,
   onDelete,
+  onStartNewExtraction,
   processingJobs = [],
 }) {
-  const [showUploadOverride, setShowUploadOverride] = useState(false)
-
-  // Auto-dismiss upload override once the user picks files
-  useEffect(() => {
-    if (files?.length > 0) setShowUploadOverride(false)
-  }, [files?.length])
-
   const isExtracting =
     uploadState === uploadStates?.UPLOADING ||
     uploadState === uploadStates?.SUBMITTED ||
-    uploadState === uploadStates?.DONE ||
     uploadState === uploadStates?.ERROR
 
   let inner
@@ -337,33 +351,6 @@ export default function RightContextPanel({
         STATES={uploadStates}
       />
     )
-  } else if (showUploadOverride) {
-    inner = (
-      <div className="flex flex-col h-full">
-        <div className="shrink-0 flex items-center justify-between px-4 py-3.5 border-b border-surface-border">
-          <div>
-            <p className="text-sm font-semibold text-ink">Upload documents</p>
-            <p className="text-xs text-ink-muted mt-0.5">Drag files or browse to add</p>
-          </div>
-          {activeDoc && (
-            <button
-              onClick={() => setShowUploadOverride(false)}
-              aria-label="Back to document preview"
-              className="rounded-lg border border-surface-border bg-surface-muted p-1.5 text-ink-faint hover:text-ink transition-colors"
-            >
-              <XIcon className="h-3.5 w-3.5" />
-            </button>
-          )}
-        </div>
-        <div className="flex-1 flex flex-col justify-center gap-4 p-4">
-          <DropZone onFiles={onFiles} />
-          <div className="text-center space-y-0.5">
-            <p className="text-xs text-ink-faint">PDF, DOCX, XLSX, PPTX, PNG, JPG</p>
-            <p className="text-xs text-ink-faint">Maximum 50 MB per file</p>
-          </div>
-        </div>
-      </div>
-    )
   } else if (activeDoc) {
     inner = (
       <DocumentPreviewPanel
@@ -372,7 +359,7 @@ export default function RightContextPanel({
         onChat={onChat}
         onDownload={onDownload}
         onDelete={onDelete}
-        onUploadMore={() => setShowUploadOverride(true)}
+        onStartNewExtraction={onStartNewExtraction}
       />
     )
   } else if (processingJobs.length > 0) {

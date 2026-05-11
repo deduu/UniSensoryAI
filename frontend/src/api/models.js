@@ -1,8 +1,32 @@
 /**
  * Static model registry derived from configs/models.yaml.
  * Updated at build time — no runtime fetch needed.
+ *
+ * Order matters: the first entry is the default for extraction
+ * (Dashboard, Parse, Playground). Cloud models lead so first-time users
+ * get the highest-accuracy option without local GPU setup.
  */
 export const AVAILABLE_MODELS = [
+  {
+    id: 'gpt-4o',
+    name: 'GPT-4o',
+    provider: 'openai',
+    providerLabel: 'OpenAI',
+    type: 'cloud',
+    capabilities: ['PDF', 'Images', 'Documents', 'Visual QA'],
+    params: 'Cloud API',
+    description: 'OpenAI flagship multimodal model via API.',
+  },
+  {
+    id: 'gemini-2.0-flash',
+    name: 'Gemini 2.0 Flash',
+    provider: 'google',
+    providerLabel: 'Google',
+    type: 'cloud',
+    capabilities: ['PDF', 'Images', 'Documents', 'Visual QA'],
+    params: 'Cloud API',
+    description: 'Google fast multimodal model via API.',
+  },
   {
     id: 'qwen3-vl-30b',
     name: 'Qwen3-VL-30B-A3B-Instruct',
@@ -52,25 +76,5 @@ export const AVAILABLE_MODELS = [
     capabilities: ['PDF', 'Images', 'Documents'],
     params: 'Small',
     description: 'DeepSeek vision-language model for document analysis.',
-  },
-  {
-    id: 'gpt-4o',
-    name: 'GPT-4o',
-    provider: 'openai',
-    providerLabel: 'OpenAI',
-    type: 'cloud',
-    capabilities: ['PDF', 'Images', 'Documents', 'Visual QA'],
-    params: 'Cloud API',
-    description: 'OpenAI flagship multimodal model via API.',
-  },
-  {
-    id: 'gemini-2.0-flash',
-    name: 'Gemini 2.0 Flash',
-    provider: 'google',
-    providerLabel: 'Google',
-    type: 'cloud',
-    capabilities: ['PDF', 'Images', 'Documents', 'Visual QA'],
-    params: 'Cloud API',
-    description: 'Google fast multimodal model via API.',
   },
 ]

@@ -5,6 +5,7 @@ import App from './App'
 import { AppProvider } from './context/AppContext'
 import { JobProvider } from './context/JobContext'
 import { SettingsProvider } from './context/SettingsContext'
+import { ToastProvider } from './context/ToastContext'
 import './index.css'
 
 ReactDOM.createRoot(document.getElementById('root')).render(
@@ -13,7 +14,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
       <AppProvider>
         <SettingsProvider>
           <JobProvider>
-            <App />
+            <ToastProvider>
+              <App />
+            </ToastProvider>
           </JobProvider>
         </SettingsProvider>
       </AppProvider>

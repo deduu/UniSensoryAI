@@ -1,29 +1,34 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ['./index.html', './src/**/*.{js,jsx}'],
+  darkMode: 'class',
   theme: {
     extend: {
       colors: {
+        // Sidebar tokens — alias to surface/ink for theme awareness.
+        // (`sidebar.text` and `sidebar.text-active` only used in legacy spots.)
         sidebar: {
-          bg: '#09090b', // Sleek deep dark
-          hover: 'rgba(255, 255, 255, 0.05)',
-          active: 'rgba(255, 255, 255, 0.1)',
-          text: '#a1a1aa', // Zinc 400
-          'text-active': '#ffffff',
+          bg: 'rgb(var(--surface) / <alpha-value>)',
+          hover: 'rgb(var(--surface-subtle))',
+          active: 'rgb(var(--surface-border))',
+          text: 'rgb(var(--ink-muted) / <alpha-value>)',
+          'text-active': 'rgb(var(--ink) / <alpha-value>)',
         },
+        // Brand stays static — looks the same in both themes.
         brand: {
           DEFAULT: '#6366f1', // Indigo 500
           hover: '#818cf8', // Indigo 400
-          light: 'rgba(99, 102, 241, 0.15)', // Indigo transparent
+          light: 'rgba(99, 102, 241, 0.15)',
           glow: 'rgba(99, 102, 241, 0.5)',
         },
         surface: {
-          DEFAULT: '#09090b', // Deep dark background
-          muted: '#18181b', // Zinc 900
-          subtle: 'rgba(255, 255, 255, 0.03)',
-          border: 'rgba(255, 255, 255, 0.1)',
-          glass: 'rgba(24, 24, 27, 0.65)', // Glass background
+          DEFAULT: 'rgb(var(--surface) / <alpha-value>)',
+          muted: 'rgb(var(--surface-muted) / <alpha-value>)',
+          subtle: 'rgb(var(--surface-subtle))',
+          border: 'rgb(var(--surface-border))',
+          glass: 'rgb(var(--surface-glass))',
         },
+        // Status colors stay static — semantic meaning is theme-agnostic.
         status: {
           pending: '#a1a1aa',
           processing: '#f59e0b',
@@ -31,9 +36,9 @@ export default {
           failed: '#ef4444',
         },
         ink: {
-          DEFAULT: '#ffffff',
-          muted: '#a1a1aa', // Zinc 400
-          faint: '#52525b', // Zinc 600
+          DEFAULT: 'rgb(var(--ink) / <alpha-value>)',
+          muted: 'rgb(var(--ink-muted) / <alpha-value>)',
+          faint: 'rgb(var(--ink-faint) / <alpha-value>)',
         },
       },
       fontFamily: {

@@ -34,7 +34,7 @@ export default function ChatToolbar({
   const currentPreset = tempPresets.find((p) => Math.abs(p.value - temperature) < 0.05)
 
   return (
-    <div className="flex items-center gap-2 border-b border-surface-border/50 bg-surface/20 backdrop-blur-sm px-4 py-2.5 overflow-x-auto">
+    <div className="h-14 shrink-0 flex items-center gap-2 bg-surface/30 backdrop-blur-sm px-4 overflow-x-auto">
       {/* Model Selector */}
       <div className="relative">
         <button
@@ -109,9 +109,6 @@ export default function ChatToolbar({
           </>
         )}
       </div>
-
-      {/* Divider */}
-      <div className="h-5 w-px bg-surface-border/50 shrink-0" />
 
       {/* Thinking Toggle */}
       <button

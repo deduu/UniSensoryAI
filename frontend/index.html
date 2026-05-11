@@ -5,6 +5,15 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Intelidoc</title>
+    <script>
+      // Apply persisted theme before React mounts to prevent FOUC.
+      (function () {
+        try {
+          var t = localStorage.getItem('unisensory_theme')
+          if (t === 'dark') document.documentElement.classList.add('dark')
+        } catch (e) { /* ignore */ }
+      })()
+    </script>
   </head>
   <body class="bg-surface text-ink antialiased">
     <div id="root"></div>
