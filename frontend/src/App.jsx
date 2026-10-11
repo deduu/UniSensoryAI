@@ -1,23 +1,25 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import AppShell from './components/layout/AppShell'
+import ProtectedRoute from './components/auth/ProtectedRoute'
 import Dashboard from './pages/Dashboard'
 import Chat from './pages/Chat'
+import Login from './pages/Login'
 import Models from './pages/Models'
 import Settings from './pages/Settings'
-import { useJobList } from './hooks/useJobList'
 
 export default function App() {
-  useJobList() // Fetch and sync jobs on app load
-
   return (
     <Routes>
-      <Route element={<AppShell />}>
-        <Route index element={<Dashboard />} />
-        <Route path="documents" element={<Navigate to="/" replace />} />
-        <Route path="chat" element={<Chat />} />
-        <Route path="models" element={<Models />} />
-        <Route path="settings" element={<Settings />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="/login" element={<Login />} />
+      <Route element={<ProtectedRoute />}>
+        <Route element={<AppShell />}>
+          <Route index element={<Dashboard />} />
+          <Route path="documents" element={<Navigate to="/" replace />} />
+          <Route path="chat" element={<Chat />} />
+          <Route path="models" element={<Models />} />
+          <Route path="settings" element={<Settings />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Route>
       </Route>
     </Routes>
   )

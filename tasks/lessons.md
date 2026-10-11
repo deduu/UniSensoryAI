@@ -35,6 +35,17 @@ before using examples from older versions.
 4. Mock DB sessions in unit tests — never hit real database
 5. Mock model inference — never load real models in unit tests
 6. Verify installed third-party UI component APIs before using version-sensitive props
+7. Confirm that the selected Python interpreter includes pytest before running verification; an existing .venv alone does not establish that development dependencies are installed.
+
+### Verify the test environment before selecting an interpreter
+**Date:** 2026-10-11
+**Context:** Architecture walkthrough verification selected the existing `.venv` interpreter, but pytest was installed only in the system interpreter. Async workflow runs then stalled even with plugin autoload disabled.
+**Rule:** Check the interpreter's test dependencies first. If an async verification run stalls without results, bound and stop it, report the limitation, and distinguish inspected contracts from successfully executed tests.
+
+### Distinguish sandbox failures from application failures
+**Date:** 2026-10-11
+**Context:** The checkpoint frontend build failed with EPERM resolving `index.html` in the sandbox, and earlier async tests stalled. Authorized bounded retries outside the sandbox passed the build and 81 focused workflow/auth tests.
+**Rule:** When filesystem permissions or the execution sandbox block validation, retry the same bounded check with authorized escalation before attributing the failure to application code. Report the environment and retain the distinction between focused checks and full-suite verification.
 
 ### Preserve source extraction before enrichment
 **Date:** 2026-05-07

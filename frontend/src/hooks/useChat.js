@@ -201,6 +201,24 @@ export function useChat() {
 
       for await (const chunk of stream) {
         if (controller.signal.aborted) break
+
+        // Orchestration may emit a non-OpenAI frame carrying web sources +
+        // citations. Append them to the doc-context citations already shown
+        // so the rendered message badges include researched web URLs.
+        if (chunk.citations || chunk.sources) {
+          const webCitations = (chunk.citations || []).map((c) => ({
+            n: c.n,
+            filename: c.title || c.url || `Source ${c.n}`,
+            url: c.url,
+            excerpt: '',
+          }))
+          if (webCitations.length > 0) {
+            liveCitations.push(...webCitations)
+            setStreamingCitations([...liveCitations])
+          }
+          continue
+        }
+
         fullContent += chunk.content
         if (chunk.usage) lastUsage = chunk.usage
 

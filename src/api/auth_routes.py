@@ -59,6 +59,24 @@ def _cookie_secure() -> bool:
     return os.getenv("COOKIE_SECURE", "false").lower() == "true"
 
 
+def _cookie_samesite() -> str:
+    # Default "lax" covers same-site (same eTLD+1) deployments —
+    # e.g. app.example.com + api.example.com. Set to "none" only when
+    # the SPA is served from a different registrable domain (rare).
+    value = os.getenv("COOKIE_SAMESITE", "lax").lower()
+    if value not in {"lax", "strict", "none"}:
+        return "lax"
+    return value
+
+
+def _cookie_domain() -> Optional[str]:
+    # Leave unset (host-only cookie) for single-domain deployments.
+    # Set to ".example.com" when frontend and API live on different
+    # subdomains and you want the cookie scoped to both.
+    domain = os.getenv("COOKIE_DOMAIN", "").strip()
+    return domain or None
+
+
 def _build_oauth() -> OAuth:
     """Construct and configure the Authlib OAuth registry.
 
@@ -102,15 +120,21 @@ def _provider_configured(provider: str) -> bool:
 
 
 def _set_session_cookie(response: Response, token: str) -> None:
-    response.set_cookie(
+    samesite = _cookie_samesite()
+    secure = _cookie_secure() or samesite == "none"  # browsers require Secure when SameSite=None
+    kwargs: dict[str, Any] = dict(
         key=COOKIE_NAME,
         value=token,
         httponly=True,
-        secure=_cookie_secure(),
-        samesite="lax",
+        secure=secure,
+        samesite=samesite,
         max_age=AuthConfig.get_expiration_minutes() * 60,
         path="/",
     )
+    domain = _cookie_domain()
+    if domain:
+        kwargs["domain"] = domain
+    response.set_cookie(**kwargs)
 
 
 async def _extract_identity(provider: str, client: Any, token: dict) -> dict:
@@ -215,5 +239,11 @@ async def me(user: UserContext = Depends(get_user_context)) -> JSONResponse:
 @router.post("/logout")
 async def logout() -> Response:
     response = JSONResponse(content={"detail": "Logged out"})
-    response.delete_cookie(COOKIE_NAME, path="/")
+    # delete_cookie must match the path/domain used when setting the cookie,
+    # otherwise the browser keeps the original.
+    domain = _cookie_domain()
+    if domain:
+        response.delete_cookie(COOKIE_NAME, path="/", domain=domain)
+    else:
+        response.delete_cookie(COOKIE_NAME, path="/")
     return response

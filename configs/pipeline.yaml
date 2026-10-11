@@ -9,14 +9,17 @@ pipelines:
     stage_timeout_s: 60
 
   advanced:
-    description: "Advanced pipeline with validation and routing"
+    description: >
+      Full pipeline with hybrid PDF extraction, schema-driven structured
+      output, per-page content critic, and enrichment into content_chunks.
+      Use this for invoice/receipt/form documents where typed extraction
+      and validation matter.
     stages:
       - ingestion
-      - validation
-      - routing
       - conversion
       - inference
       - content_validation
+      - structured_output
       - enrichment
       - formatting
     stage_timeout_s: 90

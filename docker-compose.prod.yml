@@ -1,0 +1,73 @@
+# Production overlay. Run alongside docker-compose.yml:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# The dev compose file exposes Postgres on 5434 and Redis on 6379 to the
+# host. This overlay removes those public bindings (services talk to
+# each other over the internal docker network), adds a Caddy reverse
+# proxy that terminates TLS, and runs the FastAPI image built from
+# ./Dockerfile.
+
+services:
+  db:
+    # Production: only the app container should reach Postgres.
+    # Override the dev `ports:` to drop the host binding.
+    ports: []
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+
+  redis:
+    ports: []
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      # Override the localhost defaults so the app talks to the
+      # docker-network services, not the host.
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379/0
+      UPLOADS_DIR: /app/data/uploads
+    volumes:
+      - uploads:/app/data/uploads
+    expose:
+      - "8010"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8010/').read()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  caddy:
+    image: caddy:2-alpine
+    restart: always
+    depends_on:
+      - api
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      # Caddy substitutes {$API_DOMAIN} from this env at startup.
+      API_DOMAIN: ${API_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL}
+
+volumes:
+  uploads:
+  caddy_data:
+  caddy_config:

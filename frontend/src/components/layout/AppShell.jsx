@@ -1,10 +1,12 @@
 import { Outlet, useLocation } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import { useBackendHealth } from '../../hooks/useBackendHealth'
+import { useJobList } from '../../hooks/useJobList'
 
 export default function AppShell() {
   const location = useLocation()
   useBackendHealth()
+  useJobList() // Fetch jobs once authenticated
 
   return (
     <div className="flex min-h-screen mesh-bg animate-fade-in text-ink selection:bg-brand selection:text-white">

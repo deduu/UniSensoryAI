@@ -1,22 +1,11 @@
+import logging
+
 from .loader import ModelLoader
-# from .huggingface import HuggingFaceModel
-from .deepseek import DeepSeekModel
 from .cloud_api import CloudAPIModel
-from .llava import LLaVAModel
-from .qwen import QwenModel
-from .lightonocr import LightOnOCRModel
 
+logger = logging.getLogger(__name__)
 
-# Register HuggingFace model implementations
-# ModelLoader.register_loader("huggingface", HuggingFaceModel)
-ModelLoader.register_loader("deepseek", DeepSeekModel)
-
-ModelLoader.register_loader("llava", LLaVAModel)
-ModelLoader.register_loader("qwen", QwenModel)
-ModelLoader.register_loader("lightonocr", LightOnOCRModel)
-
-#Register other providers
-# Re-use generic cloud loader — all providers below expose OpenAI-compatible endpoints
+# Cloud providers are always registered — no heavy deps.
 ModelLoader.register_loader("openai", CloudAPIModel)
 ModelLoader.register_loader("google", CloudAPIModel)
 ModelLoader.register_loader("together", CloudAPIModel)
@@ -24,4 +13,24 @@ ModelLoader.register_loader("fireworks", CloudAPIModel)
 ModelLoader.register_loader("openrouter", CloudAPIModel)
 ModelLoader.register_loader("deepinfra", CloudAPIModel)
 
-__all__ = ["ModelLoader", "HuggingFaceModel", "DeepSeekModel", "CloudAPIModel", "LLaVAModel", "QwenModel", "LightOnOCRModel"]
+# Local-VLM providers depend on torch/transformers/bitsandbytes (the
+# `local-vlm` extras group). Skip registration if those aren't installed
+# — the production CPU/cloud image deliberately omits them.
+try:
+    from .deepseek import DeepSeekModel
+    from .llava import LLaVAModel
+    from .qwen import QwenModel
+    from .lightonocr import LightOnOCRModel
+
+    ModelLoader.register_loader("deepseek", DeepSeekModel)
+    ModelLoader.register_loader("llava", LLaVAModel)
+    ModelLoader.register_loader("qwen", QwenModel)
+    ModelLoader.register_loader("lightonocr", LightOnOCRModel)
+except ImportError as e:
+    logger.info(
+        "Local-VLM providers disabled (torch/transformers not installed): %s. "
+        "Install with `uv sync --extra local-vlm` to enable.",
+        e,
+    )
+
+__all__ = ["ModelLoader", "CloudAPIModel"]

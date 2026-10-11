@@ -5,7 +5,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 LLMRole = Literal["system", "user", "assistant", "tool"]
 
@@ -37,6 +37,18 @@ class LLMResponse(BaseModel):
     finish_reason: str | None = None
     token_usage: dict[str, int] = Field(default_factory=dict)
     raw: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("token_usage", mode="before")
+    @classmethod
+    def _drop_non_int_usage(cls, value: Any) -> Any:
+        # Providers (OpenAI, OpenRouter, etc.) increasingly return nested
+        # objects under `usage` such as `prompt_tokens_details`,
+        # `completion_tokens_details`, and `latency_checkpoint`. The full
+        # payload is preserved on `raw`; here we keep only the scalar int
+        # counters so downstream aggregation stays well-typed.
+        if not isinstance(value, dict):
+            return value
+        return {k: v for k, v in value.items() if isinstance(v, int) and not isinstance(v, bool)}
 
 
 class LLMProvider(ABC):

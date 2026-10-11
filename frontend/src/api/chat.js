@@ -1,11 +1,11 @@
-import { apiFetch } from './client'
+import { API_BASE, apiFetch } from './client'
 
 /**
  * Chat API — Conversation & Message CRUD via backend.
  * LLM completions are called directly from the browser to cloud APIs.
  */
 
-export async function createConversation(data, baseUrl = '') {
+export async function createConversation(data, baseUrl = API_BASE) {
   return apiFetch('/v1/chat/conversations', {
     baseUrl,
     method: 'POST',
@@ -14,15 +14,15 @@ export async function createConversation(data, baseUrl = '') {
   })
 }
 
-export async function listConversations(baseUrl = '') {
+export async function listConversations(baseUrl = API_BASE) {
   return apiFetch('/v1/chat/conversations', { baseUrl })
 }
 
-export async function getConversation(id, baseUrl = '') {
+export async function getConversation(id, baseUrl = API_BASE) {
   return apiFetch(`/v1/chat/conversations/${id}`, { baseUrl })
 }
 
-export async function updateConversation(id, data, baseUrl = '') {
+export async function updateConversation(id, data, baseUrl = API_BASE) {
   return apiFetch(`/v1/chat/conversations/${id}`, {
     baseUrl,
     method: 'PUT',
@@ -31,14 +31,14 @@ export async function updateConversation(id, data, baseUrl = '') {
   })
 }
 
-export async function deleteConversation(id, baseUrl = '') {
+export async function deleteConversation(id, baseUrl = API_BASE) {
   return apiFetch(`/v1/chat/conversations/${id}`, {
     baseUrl,
     method: 'DELETE',
   })
 }
 
-export async function addMessage(conversationId, data, baseUrl = '') {
+export async function addMessage(conversationId, data, baseUrl = API_BASE) {
   return apiFetch(`/v1/chat/conversations/${conversationId}/messages`, {
     baseUrl,
     method: 'POST',
@@ -52,7 +52,7 @@ export async function addMessage(conversationId, data, baseUrl = '') {
  * The backend uses OPENAI_API_KEY / OPENAI_API_BASE from .env first,
  * falling back to keys passed here (from Settings) if env vars are absent.
  */
-export async function* streamBackendCompletion(messages, config, baseUrl = '') {
+export async function* streamBackendCompletion(messages, config, baseUrl = API_BASE) {
   const { apiKey, apiBase, model, temperature = 0.7 } = config
 
   const response = await fetch(`${baseUrl}/v1/chat/completions/stream`, {
@@ -93,6 +93,17 @@ export async function* streamBackendCompletion(messages, config, baseUrl = '') {
       try {
         const parsed = JSON.parse(data)
         if (parsed.error) throw new Error(parsed.error)
+        // Orchestration sources/citations frame — emitted just before [DONE]
+        // when the analyzer routed to the search path.
+        if (parsed.sources || parsed.citations || parsed.query_type) {
+          yield {
+            sources: parsed.sources || [],
+            citations: parsed.citations || [],
+            queryType: parsed.query_type || null,
+            refinedQueries: parsed.refined_queries || [],
+          }
+          continue
+        }
         const delta = parsed.choices?.[0]?.delta?.content
         if (delta) yield { content: delta, usage: parsed.usage }
       } catch (e) {

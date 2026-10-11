@@ -10,9 +10,10 @@ import {
   User,
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import SidebarItem from './SidebarItem'
 import { useSettings } from '../../context/SettingsContext'
+import { useAuth } from '../../context/AuthContext'
 
 const NAV_ITEMS = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -24,7 +25,15 @@ export default function Sidebar() {
   const [accountOpen, setAccountOpen] = useState(false)
   const accountRef = useRef(null)
   const { theme, toggleTheme } = useSettings()
+  const { user, logout } = useAuth()
+  const navigate = useNavigate()
   const isDark = theme === 'dark'
+
+  const handleLogout = async () => {
+    setAccountOpen(false)
+    await logout()
+    navigate('/login', { replace: true })
+  }
 
   useEffect(() => {
     if (!accountOpen) return undefined
@@ -88,7 +97,7 @@ export default function Sidebar() {
               </Link>
               <button
                 type="button"
-                onClick={() => setAccountOpen(false)}
+                onClick={handleLogout}
                 className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-ink-muted transition-colors hover:bg-surface-subtle hover:text-ink"
               >
                 <LogOut className="h-4 w-4" />
@@ -109,7 +118,9 @@ export default function Sidebar() {
             <User className="h-4 w-4" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-ink truncate">My Account</p>
+            <p className="text-sm font-medium text-ink truncate">
+              {user?.email || user?.user_id || 'My Account'}
+            </p>
             <p className="mt-0.5 truncate text-[11px] text-ink-faint">Settings and session</p>
           </div>
           <ChevronUp className={`h-4 w-4 shrink-0 text-ink-faint transition-transform ${accountOpen ? 'rotate-180' : ''}`} />

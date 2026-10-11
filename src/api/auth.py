@@ -22,7 +22,7 @@ Environment variables:
 import os
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Optional, Union
+from typing import Annotated, Any, Dict, Optional, Union
 
 from fastapi import Cookie, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -213,7 +213,7 @@ async def get_current_user(
 
 async def get_user_context(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(_security),
-    access_token: Optional[str] = Cookie(default=None),
+    access_token: Annotated[Optional[str], Cookie()] = None,
 ) -> UserContext:
     """FastAPI dependency that always yields a ``UserContext``.
 

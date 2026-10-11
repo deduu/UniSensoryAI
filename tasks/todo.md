@@ -1,5 +1,55 @@
 # UniSensoryAI — Project Roadmap
 
+## Checkpoint before extraction refactor — 2026-10-11
+
+- [x] Review tracked/untracked changes and the unpublished commit; exclude secrets and generated artifacts.
+- [x] Run bounded validation and record passing checks and unresolved limits.
+- [ ] Create `codex/checkpoint-before-extraction-refactor`, stage the intended snapshot, and commit it.
+- [ ] Push the checkpoint branch and verify its remote commit and local status.
+
+### Review
+
+Scope is a recoverable work-in-progress snapshot of the existing OAuth/frontend, extraction, chat/policy, and deployment work. Retains the unpublished orchestration commit `f0aba0a` in its ancestry. The extraction refactor is deferred.
+
+- Review: two focused read-only reviews plus deployment/source inspection. Credential-pattern scan covered 91 outgoing files with no matches. Real `.env`, uploads, dependencies, frontend build output, and caches remain excluded by Git ignore rules.
+- Verification: `git diff --check` passed; syntax checks passed for 67 outgoing Python files; 63 focused synchronous tests passed (33 async tests deselected); 81 focused workflow/auth tests passed (one Google metadata network test excluded). These two test runs overlap and are not an aggregate unique-test count.
+- Frontend: `npm run build` passed. The initial sandboxed run failed resolving `index.html` with EPERM; the authorized retry outside the sandbox succeeded. Existing bundle-size/Browserslist warnings remain.
+- Async verification: the authorized retry outside the sandbox completed successfully, resolving the earlier walkthrough's runner-stall limitation for this focused subset. No full-suite, lint/type, live model/database, or Docker deployment validation is claimed.
+- Dependency limit: `uv.lock` still lists heavy ML packages as core dependencies and lacks the new `local-vlm` extra; lock metadata does not match `pyproject.toml`.
+- Auth/frontend limits: cross-origin chat fetch lacks cookie credentials; explicit empty backend URL overrides can bypass the Vite API default; cached extracted jobs are not cleared/scoped on account switches; combined document/web citation indexes can identify the wrong source.
+- Extraction limits: uploads still select `basic`; advanced stages are not API-selectable; structured validation diagnostics can include document values in logs and are not fully persisted; critic failures can appear as no findings; basic range chunks use ordinal page numbers.
+- Publication: checkpoint branch created from the current local `main`; reviewed snapshot commit and remote verification pending.
+
+## Product-owner codebase walkthrough — 2026-10-11
+
+- [x] Trace a concrete business scenario through the current working tree.
+- [x] Separate business concepts, runtime components, and code organization.
+- [x] Cross-check active functionality and implementation limits against source and tests.
+- [x] Deliver a business-first explanation and a recommended code-reading path.
+
+### Review
+
+- Used the repository's Acme existing/proposed AI policy demo to ground the business journey.
+- Verified upload/extraction/persistence, on-demand policy review, and document-grounded chat with direct source inspection and three focused read-only explorations.
+- Distinguished active basic extraction from registered advanced stages and unused document routing; distinguished current UI routes from leftover page files.
+- Identified product limits: automatic recent-document reference selection, missing tenant scope on policy comparison references, bounded chat document context, incomplete streaming/tool use, and memory-queue/error handling gaps.
+- Inspected representative test contracts; did not execute tests or a live model/database workflow for this explanatory task. Only this tracking section was changed; existing application work was preserved.
+
+## Codebase architecture walkthrough — 2026-10-11
+
+- [x] Trace the current runtime entry points and repository structure.
+- [x] Map document extraction, policy review, and chat orchestration with their inputs and outputs.
+- [x] Verify representative flows against focused tests and identify implementation limits.
+- [x] Explain the architecture with a diagram, examples, and a suggested reading order.
+
+### Review
+
+- Traced the current working tree with three read-only explorations plus direct source inspection.
+- Normal uploads select the basic stage pipeline; advanced stages and document routing are not connected to that upload path. Chat and policy use separate orchestration implementations.
+- Verified source/test contracts for extraction, structured chunks, chat routing, policy findings, and persistence. Configuration/schema subset: 33 tests passed using the system Python interpreter.
+- Async workflow tests stalled at the first async test in this environment, including with plugin autoload disabled and the Windows selector policy; stopped the runs. No live model/API/database processing was verified.
+- Delivered an architecture diagram, repository map, example inputs/outputs, active-path caveats, and reading order in chat. Application source and existing application changes were preserved.
+
 ## Phase 1: Stabilize Foundation (Current)
 - [x] Fix hardcoded model_id in processor — thread from API → queue → processor
 - [x] Create shared test fixtures (tests/conftest.py)
@@ -222,9 +272,79 @@ Reconciled with a previous session's partial work on the same feature and finish
 - Updated [.env.example](.env.example) with the new auth env vars (`DEFAULT_TENANT_ID`, `JWT_SECRET_KEY`, `JWT_ALGORITHM`, `JWT_EXPIRATION_MINUTES`).
 
 **Explicitly deferred (still TODO whenever OAuth ships)**
-- `/v1/auth/login/{provider}`, `/v1/auth/callback/{provider}`, `/v1/auth/me`, `/v1/auth/logout` endpoints
-- Authlib dependency + Google/GitHub OAuth client setup
-- Frontend `AuthContext`, `Login.jsx`, `ProtectedRoute`, cookie-based token transport
-- First-login auto-create-tenant logic
-- Tightening CORS allow-list to env-driven
-- Per-tenant invites / sharing / roles beyond `member`
+- ~~`/v1/auth/login/{provider}`, `/v1/auth/callback/{provider}`, `/v1/auth/me`, `/v1/auth/logout` endpoints~~ (shipped — see Phase B review below)
+- ~~Authlib dependency + Google/GitHub OAuth client setup~~ (shipped)
+- ~~Frontend `AuthContext`, `Login.jsx`, `ProtectedRoute`, cookie-based token transport~~ (shipped — see Phase E review below)
+- ~~First-login auto-create-tenant logic~~ (shipped in `UserService.upsert_oauth_user`)
+- ~~Tightening CORS allow-list to env-driven~~ (shipped — `CORS_ALLOW_ORIGINS`)
+- Per-tenant invites / sharing / roles beyond `member` — **still open**
+
+### Review (Phases B + E — OAuth backend + frontend login)
+
+**Phase B — OAuth backend**
+- Added [`UserService.upsert_oauth_user`](src/services/user.py) — looks up `(oauth_provider, oauth_subject)` and either updates `name`/`last_login_at` or creates a fresh user + personal tenant. Tenant slug is derived from the email local-part (e.g. `alice@acme.com` → `alice`); slug collisions get a short hex suffix.
+- Treats email as globally unique — a second OAuth identity claiming an existing email returns 409, not a silent account-link.
+- 4 tests in [test_user_service.py](tests/unit/test_user_service.py) cover first login, repeat login, cross-provider email collision, slug collision.
+- Added [src/api/auth_routes.py](src/api/auth_routes.py): `/v1/auth/login/{provider}`, `/v1/auth/callback/{provider}`, `/v1/auth/me`, `/v1/auth/logout`. Providers without credentials return 503 instead of crashing.
+- JWT now travels as an **HttpOnly cookie** (`access_token`, `SameSite=Lax`, `Secure=COOKIE_SECURE`). `get_user_context` reads the cookie first and falls back to `Authorization: Bearer` for non-browser clients.
+- `SessionMiddleware` mounted (for Authlib's state token). CORS allow-list is now env-driven (`CORS_ALLOW_ORIGINS`).
+- Added [authlib>=1.3](pyproject.toml) and [itsdangerous>=2.1](pyproject.toml). 7 tests in [test_auth_routes.py](tests/unit/test_auth_routes.py) cover unknown provider → 404, unconfigured provider → 503, login redirect, callback cookie issuance, `/me`, logout cookie clearing, and a full callback → `/me` cookie round-trip.
+
+**Phase E — Frontend login**
+- [AuthContext](frontend/src/context/AuthContext.jsx) calls `/v1/auth/me` on mount and exposes `{user, isAuthenticated, loading, refresh, logout}`. Listens for the `auth:expired` window event so any 401 anywhere clears the session.
+- [apiFetch](frontend/src/api/client.js) now sends `credentials: 'include'` by default and dispatches `auth:expired` on 401 — so callers don't each handle re-auth.
+- [Login.jsx](frontend/src/pages/Login.jsx) renders two `<a href="/v1/auth/login/{google|github}">` buttons — no JS token plumbing, just a top-level navigation.
+- [ProtectedRoute.jsx](frontend/src/components/auth/ProtectedRoute.jsx) wraps `AppShell`; unauthenticated users get redirected to `/login` (with `state.from` for future return-to-where-you-were).
+- [Sidebar.jsx](frontend/src/components/layout/Sidebar.jsx) account menu now shows the real `user.email` and the Sign-out button calls `logout()` + redirects.
+- [App.jsx](frontend/src/App.jsx) registers `/login` and wraps the shell in `ProtectedRoute`. `useJobList()` moved from `App` into `AppShell` so it only fires once authenticated (avoids 401-noise on the login page).
+- `vite build` clean. `npm run dev` proxies `/v1` to backend `:8010` unchanged.
+
+**Test results**
+- `pytest -q --no-cov` (full suite): **409 passed, 4 failed**.
+- All 4 failures are **pre-existing on `main`** — verified by stashing my changes and re-running. They are DOCX/XLSX/PDF fixture-file generation breaking in this environment (`zipfile.BadZipFile`) plus the `fitz` mock-leakage already documented. Zero regressions from this work.
+- Auth/tenant subset: **88/88 pass** (test_auth, test_auth_user_context, test_auth_routes, test_user_service, test_tenant_isolation, test_db_models_tenant_user, test_api, test_services).
+
+**How to enable in real life**
+1. Create Google OAuth client; add `http://localhost:8010/v1/auth/callback/google` as authorized redirect URI.
+2. Same for GitHub OAuth App at `http://localhost:8010/v1/auth/callback/github`.
+3. Fill the four `OAUTH_*_CLIENT_ID/SECRET` env vars + a strong `SESSION_SECRET` and `JWT_SECRET_KEY`.
+4. Set `AUTH_ENABLED=true`. Set `COOKIE_SECURE=true` in production (HTTPS).
+5. Visit `/login` in the SPA → click Sign in with Google → land back on `/`.
+
+**Still open**
+- Tenant invites / cross-user sharing / roles beyond `member` (schema supports `role`, UI does not).
+- Refresh tokens / token revocation list (currently re-login on JWT expiry).
+- Account-linking flow (right now Google + GitHub identities for the same email return 409).
+- Hardening: rate-limit `/v1/auth/login/*`, log failed logins, rotate `JWT_SECRET_KEY` procedure.
+
+## Modular Chat Orchestration (Pormetheus-style framework + web search)
+
+Plan: [plans/in-chat-orchestration-do-elegant-anchor.md](../../.claude/plans/in-chat-orchestration-do-elegant-anchor.md). Goal — replace the pass-through chat proxy with a hybrid-routed pipeline (analyzer → direct | research+synthesize | fn-call) using a reusable framework that mirrors Pormetheus's `core/` layout.
+
+### Status
+- Framework + chat agents + composition root + endpoint integration were already built and committed in [f0aba0a](https://github.com/anthropics/claude-code) `feat(orchestration): modular agent framework with hybrid-routed chat + pluggable web search`. **80 orchestration/chat tests pass** (interfaces, models, strategies, web tools, circuit breaker, chat agents, ChatPipeline, ChatOrchestrationService, LLM providers).
+- Live endpoint [POST /v1/chat/completions/stream](../src/api/server.py#L841) now routes through `ChatOrchestrationService` and emits an extra `data: {sources, citations, query_type, refined_queries}` SSE frame just before `[DONE]`. `bypass_orchestration=true` in the request body falls back to the original pass-through proxy for debugging.
+
+### This session — finish + polish
+- [x] Policy migration: [src/policy/web_search.py](../src/policy/web_search.py) is now a 120-line backwards-compat shim delegating to `src.orchestration.tools.web.providers.duckduckgo` and `ContentFetcher`. 22 policy tests (`test_policy_web_search`, `test_policy_orchestration`, `test_policy_service`, `test_policy_llm_agent`) still pass.
+- [x] Frontend SSE parser: [streamBackendCompletion](../frontend/src/api/chat.js) detects the orchestration `sources`/`citations` frame and yields it as a distinct chunk shape. [useChat](../frontend/src/hooks/useChat.js) merges web citations with doc-context citations and pushes them to `streamingCitations` so badges render live. `vite build` clean.
+
+### Deviation from plan
+- **`configs/orchestration.yaml` was NOT added.** Composition reads from env vars (`OPENAI_API_KEY`, `WEB_SEARCH_PROVIDER`, `BRAVE_API_KEY`, `WEB_SEARCH_MAX_RESULTS`, `WEB_RESEARCH_MAX_PAGES`, `CHAT_ORCHESTRATION_TIMEOUT`) via [`ChatSettings.from_env`](../src/chat/composition.py). Matches the project's existing env-driven auth/db config style — adding YAML on top would be redundant. If you want explicit YAML later, extend `ChatSettings` with a `from_yaml` classmethod and read `configs/orchestration.yaml` via `ConfigLoader`.
+
+### Architecture notes
+- New tree:
+  - [src/orchestration/](../src/orchestration/) — generic framework. Tool/Agent ABCs, Orchestrator + Strategy Protocol, Single/Router/Pipeline/Parallel strategies, CircuitBreaker, OpenAI-compatible LLM client.
+  - [src/orchestration/tools/web/](../src/orchestration/tools/web/) — `SearchProvider` ABC + DuckDuckGo and Brave implementations, `ContentFetcher`, `WebSearchTool` (Tool-shaped, used by function-calling).
+  - [src/chat/](../src/chat/) — chat application: four agents + composite `ChatPipelineAgent` + `build_chat_orchestrator` composition root + `ChatOrchestrationService` facade.
+- Decision flow per request: `QueryAnalyzerAgent` classifies as `direct | search | ambiguous`. `direct` → `DirectAnswererAgent`. `search` → `WebResearcherAgent` (parallel page fetch) → `SynthesizerAgent` (inline `[N]` citations). `ambiguous` → `DirectAnswererAgent` with `web_search` exposed as an OpenAI function tool.
+- Provider failures are wrapped in a 3-fail / 60s `CircuitBreaker`. Half-open probe success closes the breaker; failure re-opens. Per-page fetch errors don't kill the research run — the source row stays with snippet only.
+
+### Pre-existing test failures (NOT caused by this work)
+- `test_document_converter::test_convert_pdf`, `test_pipeline_stages::TestConversionStage::test_passes_page_range` / `test_raises_on_empty_content`, `test_processor::test_process_document_job_text_processing` — all four fail with my changes stashed too. Same `zipfile.BadZipFile` + `fitz`-mock-leak issue documented at line 218 above.
+
+### Still open (out of scope for this pass)
+- Real token streaming end-to-end. Today the pipeline runs to completion then yields the full response as one SSE chunk. The frame shape is OpenAI-compatible, so when we add streaming inside `OpenAICompatibleClient` and thread it through `DirectAnswererAgent`/`SynthesizerAgent`, the frontend won't need changes.
+- Function-calling tool loop. `DirectAnswererAgent` currently surfaces `web_search` as an offered tool but doesn't actually execute returned tool calls. Add a tool-call loop in `DirectAnswererAgent.run` once we want the LLM to dispatch search itself.
+- Migrating policy review agents to use the orchestration `WebSearchTool` directly (not just the shim). Mechanical work; do it when there's a second consumer that benefits.
+- Tavily / SerpAPI providers — `SearchProvider` ABC supports them; add when needed.

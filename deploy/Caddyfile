@@ -1,0 +1,50 @@
+# Caddyfile for api.yourdomain.com
+#
+# {$API_DOMAIN} and {$ACME_EMAIL} are populated from the environment by
+# the caddy service in docker-compose.prod.yml. Caddy automatically
+# obtains and renews a Let's Encrypt certificate for {$API_DOMAIN}.
+#
+# CRITICAL for SSE: `flush_interval -1` disables response buffering so
+# server-sent events reach the client in real time (used by
+# /v1/jobs/{job_id}/stream and /v1/chat/completions/stream).
+
+{
+    email {$ACME_EMAIL}
+    # Uncomment while iterating to avoid LE rate limits:
+    # acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
+}
+
+{$API_DOMAIN} {
+    encode gzip zstd
+
+    # Long body uploads — set generously; FastAPI enforces real limits.
+    request_body {
+        max_size 100MB
+    }
+
+    @sse {
+        path /v1/jobs/*/stream /v1/chat/completions/stream
+    }
+
+    reverse_proxy api:8010 {
+        # Forward the client info FastAPI sees via --proxy-headers.
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+
+        # Per-request flush for SSE: never buffer streamed chunks.
+        flush_interval -1
+
+        # Don't time out long-lived streams.
+        transport http {
+            read_timeout 0
+            write_timeout 0
+        }
+    }
+
+    log {
+        output stdout
+        format console
+        level INFO
+    }
+}

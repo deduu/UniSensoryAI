@@ -33,6 +33,9 @@ class PipelineContext(BaseModel):
         raw_results: Per-item inference results (set by inference stage).
         structured_chunks: Schema-validated structured extractions (set by
             Phase 3 structured-output stage).
+        content_chunks: Final per-document chunk list (set by enrichment
+            stage). Each chunk has at minimum ``{page, type, content}``.
+            Persisted to ``Document.content_chunks`` via the formatting stage.
         formatted_output: Final aggregated output dict (set by formatting stage).
         errors: Accumulated errors from any stage.
         validation_errors: Non-fatal validation notes (set by Phase 3
@@ -55,6 +58,7 @@ class PipelineContext(BaseModel):
     model_instance: Any = None
     raw_results: Optional[List[str]] = None
     structured_chunks: Optional[List[Dict[str, Any]]] = None
+    content_chunks: Optional[List[Dict[str, Any]]] = None
     formatted_output: Optional[Dict[str, Any]] = None
 
     errors: List[str] = Field(default_factory=list)

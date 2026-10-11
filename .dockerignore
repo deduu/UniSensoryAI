@@ -1,0 +1,43 @@
+# Local development artifacts
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+*.egg-info/
+
+# Frontend — built and deployed separately to Cloudflare Pages
+frontend/
+
+# Local uploads and model weights — never bake into the image
+data/
+models_cache/
+*.gguf
+*.bin
+*.safetensors
+
+# Secrets and local env
+.env
+.env.local
+.env.*.local
+
+# Git, IDE, OS noise
+.git/
+.github/
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Docs / planning (not needed at runtime)
+tasks/
+instruction/
+*.md
+!alembic/README.md
+
+# Tests
+tests/

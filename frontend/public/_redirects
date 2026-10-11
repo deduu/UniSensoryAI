@@ -1,0 +1,5 @@
+# Cloudflare Pages SPA fallback. React Router uses HTML5 history, so any
+# deep link like /chat/abc123 must be served the SPA's index.html and let
+# the client-side router resolve it. The 200 (not 301) keeps the URL bar
+# pointing at the requested path.
+/*    /index.html   200
