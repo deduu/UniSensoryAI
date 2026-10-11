@@ -4,8 +4,8 @@
 
 - [x] Review tracked/untracked changes and the unpublished commit; exclude secrets and generated artifacts.
 - [x] Run bounded validation and record passing checks and unresolved limits.
-- [ ] Create `codex/checkpoint-before-extraction-refactor`, stage the intended snapshot, and commit it.
-- [ ] Push the checkpoint branch and verify its remote commit and local status.
+- [x] Create `codex/checkpoint-before-extraction-refactor`, stage the intended snapshot, and commit it.
+- [x] Push the checkpoint branch and verify its remote commit and local status.
 
 ### Review
 
@@ -18,7 +18,7 @@ Scope is a recoverable work-in-progress snapshot of the existing OAuth/frontend,
 - Dependency limit: `uv.lock` still lists heavy ML packages as core dependencies and lacks the new `local-vlm` extra; lock metadata does not match `pyproject.toml`.
 - Auth/frontend limits: cross-origin chat fetch lacks cookie credentials; explicit empty backend URL overrides can bypass the Vite API default; cached extracted jobs are not cleared/scoped on account switches; combined document/web citation indexes can identify the wrong source.
 - Extraction limits: uploads still select `basic`; advanced stages are not API-selectable; structured validation diagnostics can include document values in logs and are not fully persisted; critic failures can appear as no findings; basic range chunks use ordinal page numbers.
-- Publication: checkpoint branch created from the current local `main`; reviewed snapshot commit and remote verification pending.
+- Publication: snapshot commit `b5034f282efc98c2f248e23684f6c4f788012b62` pushed to `origin/codex/checkpoint-before-extraction-refactor`. `git ls-remote` confirmed the exact remote hash; local status was clean and tracking the branch. A documentation follow-up records this verified completion.
 
 ## Product-owner codebase walkthrough — 2026-10-11
 
