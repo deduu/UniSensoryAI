@@ -3,6 +3,7 @@ from fastapi.responses import StreamingResponse, FileResponse
 from src.api.validators import UploadValidator
 from src.api.auth import UserContext, get_user_context
 from src.api.auth_routes import router as auth_router
+from src.api.extraction_routes import router as extraction_router
 from src.api.rate_limit import RateLimitDep
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
@@ -15,6 +16,7 @@ import uuid
 import json
 import httpx
 from contextlib import asynccontextmanager
+from collections.abc import AsyncIterator
 
 # DB and Queuing imports
 from src.db.session import init_db, get_db
@@ -77,7 +79,15 @@ def _serialize_document(doc, *, truncate: bool = False) -> dict:
     }
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Start host services and release application-owned resources on shutdown.
+
+    Args:
+        app: Hosting FastAPI application and its injected service state.
+
+    Yields:
+        Control to the running application after startup completes.
+    """
     # Startup
     logger.info("Initializing Database...")
     init_db(DATABASE_URL)
@@ -96,11 +106,18 @@ async def lifespan(app: FastAPI):
     queue = init_ingestion_queue(process_document_job)
     await queue.start_worker()
 
-    yield
-
-    # Shutdown
-    logger.info("Shutting down Ingestion Queue...")
-    await queue.stop_worker()
+    try:
+        yield
+    finally:
+        logger.info("Shutting down Ingestion Queue...")
+        try:
+            await queue.stop_worker()
+        finally:
+            if getattr(app.state, "extraction_service_owned", False):
+                extraction_service = app.state.extraction_service
+                app.state.extraction_service = None
+                app.state.extraction_service_owned = False
+                await extraction_service.aclose()
 
 app = FastAPI(
     title="UniSensoryAI Document Processing API",
@@ -131,6 +148,7 @@ app.add_middleware(
 )
 
 app.include_router(auth_router)
+app.include_router(extraction_router)
 
 @app.get("/")
 @app.get("/health")

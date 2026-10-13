@@ -38,6 +38,52 @@ from src.db.models.ingestion import IngestionStatus  # noqa: E402
 from src.policy.models import PolicyReviewResult  # noqa: E402
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("owned", [True, False])
+async def test_extraction_lifespan_retains_host_resource_ownership(
+    monkeypatch: pytest.MonkeyPatch, owned: bool
+) -> None:
+    from fastapi import FastAPI
+    from src.api import server
+
+    application = FastAPI()
+    application.state.extraction_service = AsyncMock()
+    application.state.extraction_service_owned = owned
+    service = application.state.extraction_service
+    queue = AsyncMock()
+    monkeypatch.setattr(server, "init_db", lambda url: None)
+    monkeypatch.setattr(server.db_session, "session_manager", None)
+    monkeypatch.setattr(server, "init_ingestion_queue", lambda processor: queue)
+    async with server.lifespan(application):
+        pass
+    queue.stop_worker.assert_awaited_once()
+    if owned:
+        service.aclose.assert_awaited_once()
+    else:
+        service.aclose.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_extraction_lifespan_cleans_up_when_application_raises(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from fastapi import FastAPI
+    from src.api import server
+
+    application = FastAPI()
+    service, queue = AsyncMock(), AsyncMock()
+    application.state.extraction_service = service
+    application.state.extraction_service_owned = True
+    monkeypatch.setattr(server, "init_db", lambda url: None)
+    monkeypatch.setattr(server.db_session, "session_manager", None)
+    monkeypatch.setattr(server, "init_ingestion_queue", lambda processor: queue)
+    with pytest.raises(RuntimeError, match="application failure"):
+        async with server.lifespan(application):
+            raise RuntimeError("application failure")
+    queue.stop_worker.assert_awaited_once()
+    service.aclose.assert_awaited_once()
+
+
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
