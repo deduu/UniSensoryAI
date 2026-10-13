@@ -4,9 +4,9 @@
 
 - [x] Inspect pending changes, repository rules, lessons, and refreshed remote history.
 - [x] Review changes and validate extraction tests, API integration, dependency metadata, and formatting/types.
-- [ ] Create focused commits for dependencies, extraction library/examples, API integration, and documentation.
-- [ ] Push the reviewed commit chain to `origin/main` and verify the remote hash and clean working tree.
-- [ ] Commit the verified publication record and push its follow-up to `origin/main`.
+- [x] Create focused commits for dependencies, extraction library/examples, API integration, and documentation.
+- [x] Push the reviewed commit chain to `origin/main` and verify the remote hash and clean working tree.
+- [x] Record the verified publication results in a final documentation follow-up.
 
 ### Plan and review
 
@@ -18,6 +18,8 @@ Preserve the current feature branch and all existing changes. Include source, te
 - Checks: strict mypy passed for 44 implementation/example files using explicit package bases, silent dependency traversal, and an isolated environment with dependency stubs. Ruff, Black, and isort passed for 55 new implementation/test/example files. Python 3.10 syntax passed for 44 implementation/example files; example JSON/YAML parsed; `uv lock --check --offline` and `git diff --check` passed.
 - Credential-pattern review: 154 outgoing files had no unexpected match; the sole match was the deliberately rejected credential-bearing URL on a synthetic `.example` host in a provider test. Ignored environment files and generated artifacts remain excluded.
 - Environment: sandboxed verification stalled or failed uv cache permissions; bounded retries outside the sandbox passed. No full-suite, live provider/database, deployment, or frontend validation is claimed for this publication.
+- Content commits: `e4c4b61` dependency/schema metadata; `bb86204` reusable extraction, configuration, examples, and tests; `5725c49` authenticated API integration; `8ad52d2` extraction guides, architecture, and verification notes.
+- Publication: normal fast-forward push advanced `origin/main` from `68899d4` to `8ad52d2317e3916847ca844c9d24d35d150a3117`. An independent `git ls-remote` confirmed that exact hash matched local HEAD and the working tree was clean. This task-only documentation follow-up records the verified result. The feature branch and existing checkpoint branch are retained.
 
 ## Reusable PDF and external schema extraction — 2026-10-13
 
