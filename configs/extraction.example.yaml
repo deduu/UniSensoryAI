@@ -1,0 +1,25 @@
+settings:
+  field_attempts: 2
+  max_output_tokens: 4096
+  calls_per_second: 10
+  inference_timeout_seconds: 60
+
+# Replace model_id values with models available at your chosen endpoint.
+# Set EXTRACTION_CONFIG_PATH to this file after configuring it.
+profiles:
+  vision:
+    provider: openai_compatible
+    model_id: your-vision-model
+    base_url: https://your-provider.example/v1
+    api_key_env: EXTRACTION_API_KEY
+    supports_images: true
+    max_input_chars: 48000
+    max_images: 1
+  fields:
+    provider: openai_compatible
+    model_id: your-text-model
+    base_url: https://your-provider.example/v1
+    api_key_env: EXTRACTION_API_KEY
+    supports_images: false
+    supports_native_json: false
+    max_input_chars: 48000
