@@ -1,5 +1,67 @@
 # UniSensoryAI — Project Roadmap
 
+## Publish extraction changes to origin/main — 2026-10-13
+
+- [x] Inspect pending changes, repository rules, lessons, and refreshed remote history.
+- [x] Review changes and validate extraction tests, API integration, dependency metadata, and formatting/types.
+- [ ] Create focused commits for dependencies, extraction library/examples, API integration, and documentation.
+- [ ] Push the reviewed commit chain to `origin/main` and verify the remote hash and clean working tree.
+- [ ] Commit the verified publication record and push its follow-up to `origin/main`.
+
+### Plan and review
+
+Preserve the current feature branch and all existing changes. Include source, tests, example configuration, and documentation; exclude ignored credentials, uploads, and generated files. Push with a normal fast-forward update after confirming remote ancestry. Record actual verification results and any existing failures below before publication.
+
+- Remote ancestry: refreshed `origin/main` is an ancestor of the current branch; the existing orchestration and checkpoint commits will also become part of main.
+- Reviews: two focused read-only reviews found no concrete blocker in the library, API, examples, configuration, or documentation.
+- Verification: 163 extraction/API tests passed. A separate legacy extraction/chat/policy/auth/service subset had 123 passes and three failures; all three reproduced at unchanged checkpoint `31d322b` in an isolated temporary export (conversion tests still mock `convert` rather than `convert_hybrid`). Existing API AsyncMock warnings and a legacy JWT fixture warning remain.
+- Checks: strict mypy passed for 44 implementation/example files using explicit package bases, silent dependency traversal, and an isolated environment with dependency stubs. Ruff, Black, and isort passed for 55 new implementation/test/example files. Python 3.10 syntax passed for 44 implementation/example files; example JSON/YAML parsed; `uv lock --check --offline` and `git diff --check` passed.
+- Credential-pattern review: 154 outgoing files had no unexpected match; the sole match was the deliberately rejected credential-bearing URL on a synthetic `.example` host in a provider test. Ignored environment files and generated artifacts remain excluded.
+- Environment: sandboxed verification stalled or failed uv cache permissions; bounded retries outside the sandbox passed. No full-suite, live provider/database, deployment, or frontend validation is claimed for this publication.
+
+## Reusable PDF and external schema extraction — 2026-10-13
+
+- [x] Define validated document, multimodal, model, and external schema contracts; write and run failing tests first.
+- [x] Implement async PDF reading with full page coverage, native text/OCR selection, image assets, tables, and provenance.
+- [x] Implement injectable generation adapters and capability checks without eager ML imports or provider state in results.
+- [x] Implement composable document extraction, external-schema field extraction, validation/evidence, and combined extraction.
+- [x] Provide composition/configuration and an executable embedding example; keep existing workflow contracts intact.
+- [x] Run focused new tests, legacy extraction/chat/policy regressions, formatting/type checks where available, and independent review.
+
+### Scope and verification plan
+
+Implement the public reusable boundary and opt-in integration. Default basic/advanced, chat, and policy workflows retain their entry points and response shapes. Native-text-only extraction needs no model; text-only output may use OCR when requested. External schemas support Pydantic models and validated JSON Schema, with evidence outside the business payload. Tests use generated PDFs and fake models; real inference quality is not inferred from mock tests. Repository async/DI rules conflict with legacy synchronous model APIs, so adapt them at the boundary rather than changing legacy callers.
+
+### Review
+
+- Implemented `src/extraction/` contracts, reader and capability/model ports, document/field capabilities, bounded generation gateway, three adapters, schema validation and async composition. Native-only extraction is independent of ML/application startup; caller schemas own business fields and rules.
+- Added authenticated direct-result endpoints `/v1/extract` and `/v1/extract/fields`, host-owned resource ceilings, safe errors, lazy runtime initialization and owned-provider shutdown. Existing document job/pipeline, chat and policy paths retain their response shapes and implementation; no database migrations or UI changes.
+- TDD: contract/service/reader/provider/gateway/schema/API tests failed before implementation. Review-driven regressions established failures before rotation, concurrency, schema alias/evidence, resource ownership/cleanup and CLI stdout fixes.
+- Verification: 134 new extraction tests passed. Separate existing workflow subset: 197 passed and 3 failed; all three failures reproduced in a temporary export of checkpoint HEAD (tests still mock `convert` although production calls `convert_hybrid`). The subsequently expanded existing API suite passed 29 tests, including 3 new lifespan ownership/error-cleanup cases; that run overlaps the earlier subset.
+- Strict mypy passed for 44 new implementation/example files; Ruff passed for all new implementation/test/example files. Black/isort checks passed for 55 new implementation/test/example files. Python 3.10 syntax and function annotation audit passed. `git diff --check` and `uv lock --check` passed with jsonschema added and pre-existing local-vlm lock metadata aligned. Wheel build succeeded; an isolated extracted-wheel smoke test confirmed default YAML and embedding imports without application/ML startup. Documentation JSON and the external invoice example validated.
+- Independent review fixed rotated crop/source coordinate mismatch, process-global MuPDF table-state races, configured path typing, schema traversal/ref resolution, ungrounded evidence, native structured-output wiring, and API budget bypasses.
+- Limits: no live provider accuracy, live database, full-suite, deployment or frontend validation claimed. Complex negation/exclusive/conditional schemas may fail partial-candidate validation; final original schema validation remains mandatory. Evidence establishes literal source traceability, not semantic correctness. Assets are bounded inline PNGs; PDF work is serialized per process, with active off-thread work finishing after caller cancellation.
+- Work is on `codex/reusable-pdf-extraction`; the pushed pre-refactor checkpoint is retained. Publication status is tracked in the `Publish extraction changes to origin/main` section above.
+
+## Model agnostic workflow abstraction design — 2026-10-11
+
+- [x] Review existing extraction, model, worker, and chat boundaries and session lessons.
+- [x] Cross-check model and capability contracts with two focused read-only architecture reviews.
+- [x] Define typed capability contracts, model ports, workflow composition, and external embedding.
+- [x] Record a concrete invoice example and an incremental migration with acceptance checks.
+- [x] Verify the proposal against current source and deliver the design.
+
+### Scope
+
+Architecture proposal and implementation plan. Application implementation begins separately with failing contract tests; this task does not refactor the runtime.
+
+### Review
+
+- Saved the proposed contracts, module layout, invoice bindings/results, external host example, extension procedure, failure/resource rules, and staged acceptance checks in `documentation/WORKFLOW_ABSTRACTION.md`.
+- Two read-only architecture reviews cross-checked current source. Follow-up review corrected invoice provenance bindings, shared binary asset resolution/lifetimes, cancellation propagation, and diagnostic persistence before optional workflow exposure.
+- Verified two Python examples with syntax parsing, the YAML and JSON examples with parsers, source link targets, and source chunk provenance references. `git diff --check` passed.
+- This is a design deliverable; runtime acceptance tests remain implementation requirements. Changed documentation/task tracking only; no model, database, or live workflow execution was required or claimed.
+
 ## Checkpoint before extraction refactor — 2026-10-11
 
 - [x] Review tracked/untracked changes and the unpublished commit; exclude secrets and generated artifacts.

@@ -77,10 +77,15 @@ npm run dev
 
 Explore our robust, RESTful endpoints tailored for seamless integration.
 
+The [reusable extraction guide](documentation/EXTRACTION_API.md) covers Python embedding,
+text-only and multimodal PDF modes, external business schemas, and injectable model providers.
+
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
 | `GET` | `/health` | System health check |
 | `POST` | `/v1/process_document` | Upload document for async processing (returns `job_id`) |
+| `POST` | `/v1/extract` | Return text-only or multimodal PDF content, optionally with external-schema fields |
+| `POST` | `/v1/extract/fields` | Apply an external schema to an existing document result |
 | `GET` | `/v1/jobs` | List jobs with pagination (`?limit=50&offset=0`) |
 | `GET` | `/v1/jobs/{job_id}` | Fetch job status and resulting artifacts |
 | `DELETE` | `/v1/jobs/{job_id}` | Erase a job and associated files |

@@ -20,6 +20,31 @@ queue_manager.py and init_ingestion_queue.
 
 _(Record corrections from failed tests, code review, or bugs here.)_
 
+### Keep namespace and stub discovery consistent during isolated type checks
+**Date:** 2026-10-13
+**Context:** Publication verification initially mapped extraction files to two module names; pointing an isolated mypy tool at the system interpreter then bypassed the stubs installed in the tool environment.
+**Rule:** Use explicit package bases for the repository's `src` namespace. Run mypy in the same environment as its injected dependency stubs; choose `--python-executable` only when that interpreter also provides the intended stubs. Distinguish checker setup errors from application type errors.
+
+### Verify physical resource and external serialization boundaries
+**Date:** 2026-10-13
+**Context:** Extraction integration review caught rotated image crops using mismatched coordinates, shared MuPDF table buffers accessed concurrently, configurable request budgets bypassing server ceilings, early cleanup failures skipping later providers, YAML paths forwarded as strings, and Pydantic aliases/CLI diagnostic output breaking external serialization.
+**Rule:** Normalize render and source coordinates explicitly and test pixel content on rotated pages. Protect process-global parser state across instances, retain physical inference leases after caller cancellation, apply host-owned API budgets, and close every owned resource even after one failure. Verify public configuration and serialization with real embedding/CLI/API tests, preserve caller schema keys, and keep diagnostics separate from machine-readable stdout.
+
+### Preserve JSON Schema keyword semantics and provenance during extraction
+**Date:** 2026-10-13
+**Context:** Schema review found that recursively deleting every `required` key would corrupt business properties and literal values, and that unresolved references, empty evidence quotes, or chained validation exceptions could undermine the advertised boundary.
+**Rule:** Traverse schema positions rather than arbitrary JSON; validate references before execution; reject empty or unsupported evidence; sanitize error causes that contain source values. Validate assembled data against the unchanged external schema and state limits of partial validation for conditional or negated schemas.
+
+### Verify boundary fixtures against actual limits and supported Python versions
+**Date:** 2026-10-13
+**Context:** A chunking test fixture fit within the model's declared context, so it never exercised the intended boundary. Review also caught Python 3.11-only Self imports in code supporting 3.10 and Pydantic's reserved schema attribute.
+**Rule:** Construct boundary tests that demonstrably cross the actual serialized request budget; keep runtime annotations compatible with the package's minimum Python version and avoid reserved model field/test fixture names.
+
+### Bind provenance and resource ownership explicitly in workflow designs
+**Date:** 2026-10-11
+**Context:** Architecture review found that the invoice example promised source chunk citations but supplied only text to the capability. Generated image references also needed a shared resolver and lifetime contract, and optional analysis needed diagnostic persistence before API exposure.
+**Rule:** Trace every output's evidence and binary reference back to an explicit input or injected service. Specify asset ownership and cleanup, preserve task cancellation, and persist derived results and failure diagnostics before wiring an optional workflow into user-facing endpoints.
+
 ### Check installed component API versions before passing styling props
 **Date:** 2026-05-07
 **Context:** `react-markdown` v10 throws when given `className` directly. Styling must be applied
