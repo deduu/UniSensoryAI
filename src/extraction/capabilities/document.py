@@ -43,6 +43,7 @@ class DocumentExtractionCapability(BaseCapability[DocumentExtractionInput, Docum
         data = DocumentExtractionInput.model_validate(data)
         options = data.options
         pages: list[PageContent] = []
+        model_ids: list[str] = []
         warnings = list(data.document.warnings)
         for page in data.document.pages:
             blocks = [block for block in page.text_blocks if block.text.strip()]
@@ -75,6 +76,7 @@ class DocumentExtractionCapability(BaseCapability[DocumentExtractionInput, Docum
                             max_output_tokens=self._settings.max_output_tokens,
                         ),
                     )
+                    model_ids.append(response.model_id)
                     content = response.content.strip()
                     blocks.append(
                         TextBlock(
@@ -110,5 +112,6 @@ class DocumentExtractionCapability(BaseCapability[DocumentExtractionInput, Docum
             content_mode=options.content_mode,
             text=text,
             pages=tuple(pages),
+            model_ids=tuple(dict.fromkeys(identity for identity in model_ids if identity.strip())),
             warnings=tuple(warnings),
         )

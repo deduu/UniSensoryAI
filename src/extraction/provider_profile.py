@@ -18,3 +18,4 @@ class ProviderProfile(_Contract):
     max_input_chars: int = Field(default=48000, ge=1024)
     max_images: int = Field(default=1, ge=0)
     concurrency: int = Field(default=1, ge=1)
+    connect_retries: int = Field(default=0, ge=0, le=3)

@@ -92,3 +92,87 @@ async def test_factory_failure_closes_every_constructed_provider_safely(tmp_path
     second.aclose.assert_awaited_once()
     assert "private-value" not in str(error.value)
     assert error.value.__cause__ is None
+
+
+@pytest.mark.asyncio
+async def test_deployment_profiles_expand_explicit_environment_placeholders(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("TEST_EXTRACTION_MODEL", "host-model-${literal}")
+    monkeypatch.setenv("TEST_EXTRACTION_URL", "https://host.example/v1")
+    config = tmp_path / "extraction.yaml"
+    config.write_text(
+        "profiles:\n  vision:\n    provider: host\n"
+        "    model_id: ${TEST_EXTRACTION_MODEL}\n"
+        "    base_url: ${TEST_EXTRACTION_URL}\n",
+        encoding="utf-8",
+    )
+    built: list[ProviderProfile] = []
+
+    def factory(profile: ProviderProfile) -> FakeProvider:
+        built.append(profile)
+        return FakeProvider()
+
+    service = await build_extraction_service(
+        config_path=config, provider_factories={"host": factory}
+    )
+    assert built[0].model_id == "host-model-${literal}"
+    assert built[0].base_url == "https://host.example/v1"
+    await service.aclose()
+
+
+@pytest.mark.parametrize("environment_value", [None, ""])
+@pytest.mark.asyncio
+async def test_unresolved_configuration_environment_fails_before_constructing_provider(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    environment_value: str | None,
+) -> None:
+    from src.extraction.errors import ExtractionError
+
+    if environment_value is None:
+        monkeypatch.delenv("TEST_MISSING_EXTRACTION_MODEL", raising=False)
+    else:
+        monkeypatch.setenv("TEST_MISSING_EXTRACTION_MODEL", environment_value)
+    config = tmp_path / "extraction.yaml"
+    config.write_text(
+        "profiles:\n  fields:\n    provider: host\n"
+        "    model_id: ${TEST_MISSING_EXTRACTION_MODEL}\n",
+        encoding="utf-8",
+    )
+    built: list[ProviderProfile] = []
+
+    def factory(profile: ProviderProfile) -> FakeProvider:
+        built.append(profile)
+        return FakeProvider()
+
+    with pytest.raises(ExtractionError) as caught:
+        await build_extraction_service(config_path=config, provider_factories={"host": factory})
+    assert caught.value.code == "invalid_configuration"
+    assert "TEST_MISSING" not in str(caught.value)
+    assert not built
+
+
+@pytest.mark.asyncio
+async def test_application_configuration_binds_logical_profiles_without_model_hardcoding(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("EXTRACTION_MODEL", "deployment-selected-model")
+    monkeypatch.setenv("EXTRACTION_BASE_URL", "https://host.example/v1")
+    built: list[ProviderProfile] = []
+
+    def factory(profile: ProviderProfile) -> FakeProvider:
+        built.append(profile)
+        return FakeProvider()
+
+    config = Path(__file__).parents[2] / "configs" / "extraction.yaml"
+    service = await build_extraction_service(
+        config_path=config, provider_factories={"openai_compatible": factory}
+    )
+    assert len(built) == 2
+    assert {profile.model_id for profile in built} == {"deployment-selected-model"}
+    assert {profile.base_url for profile in built} == {"https://host.example/v1"}
+    assert [profile.supports_images for profile in built] == [True, False]
+    assert all(profile.api_key_env == "EXTRACTION_API_KEY" for profile in built)
+    assert all(not profile.supports_native_json for profile in built)
+    await service.aclose()

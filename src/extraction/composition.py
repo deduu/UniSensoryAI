@@ -2,11 +2,12 @@
 
 import asyncio
 import os
+import re
 from collections.abc import Callable, Mapping
 from pathlib import Path
 
 import yaml
-from pydantic import Field, ValidationError
+from pydantic import Field
 
 from .capabilities import DocumentExtractionInput, FieldExtractionInput
 from .contracts import DocumentResult, FieldExtractionResult, ModelDescriptor
@@ -21,6 +22,7 @@ from .service import ExtractionService
 from .settings import ExtractionSettings
 
 ProviderFactory = Callable[[ProviderProfile], BaseGenerationProvider]
+_ENVIRONMENT_REFERENCE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
 
 
 class _RuntimeConfig(_Contract):
@@ -28,12 +30,30 @@ class _RuntimeConfig(_Contract):
     profiles: dict[str, ProviderProfile] = Field(default_factory=dict)
 
 
+def _resolve_environment(value: object) -> object:
+    if isinstance(value, str):
+
+        def replacement(match: re.Match[str]) -> str:
+            configured = os.getenv(match.group(1))
+            if not configured:
+                raise ValueError("A configuration environment variable is missing.")
+            return configured
+
+        # Substitute once: environment values are data, never further templates.
+        return _ENVIRONMENT_REFERENCE.sub(replacement, value)
+    if isinstance(value, dict):
+        return {key: _resolve_environment(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_resolve_environment(item) for item in value]
+    return value
+
+
 def _read_config(path: Path) -> _RuntimeConfig:
     try:
         with path.open(encoding="utf-8") as stream:
             payload = yaml.safe_load(stream)
-        return _RuntimeConfig.model_validate(payload or {})
-    except (OSError, yaml.YAMLError, ValidationError):
+        return _RuntimeConfig.model_validate(_resolve_environment(payload or {}))
+    except (OSError, yaml.YAMLError, ValueError):
         raise ExtractionError(
             "invalid_configuration", "Extraction configuration is invalid or unavailable."
         ) from None
@@ -61,6 +81,7 @@ def _openai_factory(profile: ProviderProfile) -> BaseGenerationProvider:
         ),
         base_url=profile.base_url,
         api_key=api_key,
+        connect_retries=profile.connect_retries,
     )
 
 
@@ -81,6 +102,8 @@ async def build_extraction_service(
         reader: Optional replacement reader.
         settings: Optional validated behavior overrides.
         config_path: Deployment YAML path; defaults to packaged native-only configuration.
+            Explicit ``${NAME}`` string placeholders resolve from the environment;
+            missing or empty referenced values reject configuration before model setup.
         provider_factories: Additional explicitly registered provider implementations.
         document_capability: Replacement document operation for this runtime.
         fields_capability: Replacement schema-understanding operation for this runtime.

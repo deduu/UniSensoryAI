@@ -17,6 +17,7 @@ from src.extraction.contracts import (
 )
 from src.extraction.errors import ExtractionError
 from src.extraction.service import ExtractionService
+from src.extraction.settings import ExtractionSettings
 
 
 def page(
@@ -252,3 +253,41 @@ async def test_malformed_code_fence_is_a_typed_sanitized_failure() -> None:
     with pytest.raises(ExtractionError) as caught:
         await service.extract_fields(doc, schema())
     assert caught.value.code == "schema_validation_failed"
+
+
+@pytest.mark.asyncio
+async def test_text_only_provider_receives_explicit_portable_evidence_array_protocol() -> None:
+    service, gateway, doc = setup([page(1, "PO-1", preview=False)], [output("PO-1", "p1-text")])
+    await service.extract_fields(doc, schema())
+    request = gateway.generate.await_args.args[1]
+    assert request.json_schema is None
+    assert '"evidence" must be a JSON array' in request.prompt
+    assert '"data": {}, "evidence": []' in request.prompt
+    assert '"source_ids"' in request.prompt
+    assert '"field_path"' in request.prompt
+    assert '"quote"' in request.prompt
+    assert "literal" in request.prompt
+
+
+@pytest.mark.asyncio
+async def test_evidence_object_is_rejected_and_does_not_relax_response_contract() -> None:
+    malformed = json.dumps({"data": {"po": "PO-1"}, "evidence": {"po": {"quote": "PO-1"}}})
+    service, gateway, doc = setup([page(1, "PO-1")], [malformed] * 2)
+    with pytest.raises(ExtractionError) as caught:
+        await service.extract_fields(doc, schema())
+    assert caught.value.code == "schema_validation_failed"
+    assert gateway.generate.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_host_prompt_customization_retains_portable_response_protocol() -> None:
+    _, gateway, doc = setup([page(1, "PO-1", preview=False)], [output("PO-1", "p1-text")])
+    service = ExtractionService(
+        reader=AsyncMock(),
+        gateway=gateway,
+        settings=ExtractionSettings(fields_prompt="Host extraction guidance."),
+    )
+    await service.extract_fields(doc, schema())
+    request = gateway.generate.await_args.args[1]
+    assert request.prompt.startswith("Host extraction guidance.")
+    assert '"evidence" must be a JSON array' in request.prompt

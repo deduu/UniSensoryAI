@@ -1,8 +1,8 @@
 """Reusable document output."""
 
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import computed_field
+from pydantic import Field, computed_field
 
 from .base import _Contract
 from .issue import ExtractionIssue
@@ -17,6 +17,7 @@ class DocumentResult(_Contract):
     content_mode: Literal["text", "multimodal"]
     text: str
     pages: tuple[PageContent, ...]
+    model_ids: tuple[Annotated[str, Field(min_length=1)], ...] = ()
     warnings: tuple[ExtractionIssue, ...] = ()
 
     @computed_field  # type: ignore[prop-decorator]
