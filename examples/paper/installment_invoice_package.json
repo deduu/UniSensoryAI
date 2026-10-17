@@ -1,0 +1,60 @@
+{
+  "identity": {
+    "vendor_id": "DEMO-INSTALLMENT-VENDOR",
+    "store_id": "DEMO-INSTALLMENT-STORE",
+    "contract_number": "DEMO-INSTALLMENT-AGREEMENT"
+  },
+  "invoice": {
+    "source_document_id": "demo-installment-invoice-source",
+    "fields": {
+      "vendor_id": "DEMO-INSTALLMENT-VENDOR",
+      "store_id": "DEMO-INSTALLMENT-STORE",
+      "contract_number": "DEMO-INSTALLMENT-AGREEMENT",
+      "invoice_number": "DEMO-INSTALLMENT-INVOICE-1",
+      "invoice_date": "2026-10-15",
+      "service_period_start": null,
+      "service_period_end": null,
+      "currency": "IDR",
+      "subtotal": "983333333",
+      "tax_amount": "-98333333",
+      "total": "885000000",
+      "bank_account": "0012345678",
+      "installment_id": "stage-1",
+      "vat_amount": "0",
+      "withholding_amount": "98333333",
+      "rounding_adjustment": "0",
+      "description": "Synthetic stage-one advance rent; amounts adapted for local testing, not original source evidence."
+    },
+    "evidence": [],
+    "warnings": []
+  },
+  "tax_invoices": [],
+  "utility_statements": [],
+  "supporting_documents": [
+    {
+      "source_document_id": "demo-withholding-certificate-1",
+      "fields": {
+        "vendor_id": "DEMO-INSTALLMENT-VENDOR",
+        "store_id": "DEMO-INSTALLMENT-STORE",
+        "contract_number": "DEMO-INSTALLMENT-AGREEMENT",
+        "document_type": "withholding_certificate",
+        "reference_number": "DEMO-WHT-1",
+        "invoice_number": "DEMO-INSTALLMENT-INVOICE-1",
+        "document_date": "2026-10-15",
+        "currency": "IDR",
+        "total": "98333333",
+        "description": "Synthetic withholding certificate fields for local testing only. This is not a real tax document."
+      },
+      "evidence": [],
+      "warnings": []
+    }
+  ],
+  "review_context": {
+    "allocation_start": "2027-01-05",
+    "allocation_end": "2032-01-04",
+    "reason": "Synthetic test allocation reviewed against the synthetic installment schedule; source invoice service dates remain unknown.",
+    "source_document_ids": [
+      "demo-installment-agreement-source"
+    ]
+  }
+}

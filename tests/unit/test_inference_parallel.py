@@ -8,10 +8,8 @@ from unittest.mock import MagicMock, patch
 
 # Stub heavy/optional deps before any project import touches them. The
 # inference stage itself never calls these — they only get pulled in
-# transitively via ``src.models.__init__`` (which imports qwen.py et al.) and
-# via ``src.ingestion.converter`` (PyMuPDF).
+# transitively via ``src.models.__init__`` (which imports qwen.py et al.).
 _MOCK_MODULES = [
-    "fitz",
     "torch", "torch.cuda", "torch.nn", "torch.nn.functional",
     "torchvision", "torchvision.transforms",
     "transformers", "accelerate", "bitsandbytes",

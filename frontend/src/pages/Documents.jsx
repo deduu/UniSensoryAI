@@ -1,5 +1,5 @@
 ﻿import { useEffect, useState, useMemo, useCallback } from 'react'
-import { FileText, Search } from 'lucide-react'
+import { FileText, Search, RefreshCw } from 'lucide-react'
 import DocumentTable from '../components/documents/DocumentTable'
 import InspectorPane from '../components/documents/InspectorPane'
 import Pagination from '../components/documents/Pagination'
@@ -7,6 +7,8 @@ import BulkActionsBar from '../components/documents/BulkActionsBar'
 import EmptyState from '../components/ui/EmptyState'
 import { useDocuments } from '../hooks/useDocuments'
 import { useResizablePane } from '../hooks/useResizablePane'
+import { useJobs } from '../context/JobContext'
+import { useNavigate } from 'react-router-dom'
 
 const TYPE_TABS = [
   { key: 'all', label: 'All' },
@@ -21,6 +23,8 @@ const TYPE_TABS = [
 
 export default function Documents() {
   const { documents, search, setSearch, typeFilter, setTypeFilter } = useDocuments()
+  const { refreshJobs, historyLoading } = useJobs()
+  const navigate = useNavigate()
 
 
 
@@ -36,7 +40,7 @@ export default function Documents() {
   const pane = useResizablePane()
 
   useEffect(() => {
-    document.title = 'Documents â€” Intelidoc'
+    document.title = 'Documents — Intelidoc'
   }, [])
 
 
@@ -106,6 +110,13 @@ export default function Documents() {
       })
   }, [documents, selectedIds])
 
+  const handleDownload = doc => {
+    const url = URL.createObjectURL(new Blob([doc.content_text || ''], { type: 'text/plain;charset=utf-8' }))
+    const link = document.createElement('a')
+    link.href = url; link.download = `${doc.filename || 'document'}.txt`; link.click()
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }
+
   const handleDeselectAll = useCallback(() => {
     setSelectedIds(new Set())
   }, [])
@@ -131,6 +142,7 @@ export default function Documents() {
         
         {/* Toolbar Controls */}
         <div className="flex flex-col sm:flex-row items-center gap-3 w-full xl:w-auto">
+          <button type="button" onClick={refreshJobs} disabled={historyLoading} aria-label="Refresh saved documents" className="rounded-lg border border-surface-border p-2 text-ink-muted hover:bg-surface-muted"><RefreshCw size={16} className={historyLoading ? 'animate-spin' : ''} /></button>
           {/* Search */}
           <div className="relative w-full sm:w-64 shrink-0">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint" />
@@ -168,8 +180,8 @@ export default function Documents() {
       {documents.length === 0 ? (
         <EmptyState
           icon={FileText}
-          heading="No documents found"
-          subtext="Documents will appear here after processing completes"
+          heading={historyLoading ? 'Loading saved documents…' : 'No documents found'}
+          subtext={historyLoading ? 'Reading tenant upload history from the server' : 'Documents appear here after processing completes. Use Upload history to inspect active or failed uploads.'}
         />
       ) : (
         <div
@@ -185,6 +197,9 @@ export default function Documents() {
                 activeDocId={activeDocId}
                 selectedIds={selectedIds}
                 onSelectDoc={handleSelectDoc}
+                onPreview={handleSelectDoc}
+                onChat={doc => navigate('/chat', { state: { groundingDoc: doc } })}
+                onDownload={handleDownload}
                 onToggleSelect={handleToggleSelect}
                 onToggleSelectAll={handleToggleSelectAll}
                 isPaneOpen={pane.isOpen && !pane.isMinimized}

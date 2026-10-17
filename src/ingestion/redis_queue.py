@@ -22,16 +22,22 @@ Usage::
 import asyncio
 import json
 import logging
-import time
+from collections.abc import Awaitable, Callable, Mapping
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Dict, List, Optional
+from typing import Any
 
 import src.db.session as db_session
 from src.db.models.ingestion import IngestionStatus
+from src.ingestion.submission_cancelled_error import QueueSubmissionCancelledError
+from src.ingestion.submission_error import QueueSubmissionError
+from src.ingestion.workflow_recovery import recover_interrupted_workflow
+from src.ingestion.workflow_result import QueuedWorkflowResult
 from src.services.document import DocumentService
 from src.services.ingestion import IngestionService
+from src.services.upload_storage import resolve_upload_path
 
 logger = logging.getLogger(__name__)
+WorkflowHandler = Callable[[str, dict[str, Any]], Awaitable[dict[str, Any]]]
 
 # Retry constants
 MAX_RETRIES = 3
@@ -65,8 +71,10 @@ class RedisIngestionQueue:
         gpu_semaphore_limit: int = 1,
         queue_key: str = "unisensory:jobs",
         dlq_key: str = "unisensory:dlq",
+        workflow_handlers: Mapping[str, WorkflowHandler] | None = None,
     ) -> None:
         self.processing_function = processing_function
+        self.workflow_handlers = dict(workflow_handlers or {})
         self.redis_url = redis_url
         self.concurrency = concurrency
         self.gpu_semaphore_limit = gpu_semaphore_limit
@@ -76,7 +84,7 @@ class RedisIngestionQueue:
 
         self._redis = None
         self.is_running = False
-        self._worker_tasks: List[asyncio.Task] = []
+        self._worker_tasks: list[asyncio.Task] = []
         self._gpu_semaphore = asyncio.Semaphore(gpu_semaphore_limit)
 
     async def _get_redis(self):
@@ -89,15 +97,13 @@ class RedisIngestionQueue:
                     "redis package is required for RedisIngestionQueue. "
                     "Install it with: pip install redis"
                 )
-            self._redis = aioredis.from_url(
-                self.redis_url, decode_responses=True
-            )
+            self._redis = aioredis.from_url(self.redis_url, decode_responses=True)
         return self._redis
 
     async def enqueue(
         self,
         file_path: str,
-        meta: Optional[dict] = None,
+        meta: dict | None = None,
         *,
         tenant_id: str,
     ) -> str:
@@ -112,22 +118,62 @@ class RedisIngestionQueue:
             The created job_id string.
         """
         if db_session.session_manager is None:
-            raise RuntimeError(
-                "DatabaseSessionManager is not initialized! Call init_db first."
-            )
+            raise RuntimeError("DatabaseSessionManager is not initialized! Call init_db first.")
 
-        # Create database record
-        async with db_session.session_manager.session() as session:
-            service = IngestionService(session)
-            job = await service.create_job(file_path, meta, tenant_id=tenant_id)
-            job_id = job.id
-            await session.commit()
+        is_paper = (meta or {}).get("workflow") == "paper_extraction"
+        commit_started = False
+        job_id = None
+        try:
+            async with db_session.session_manager.session() as session:
+                service = IngestionService(session)
+                job = await service.create_job(file_path, meta, tenant_id=tenant_id)
+                job_id = job.id
+                commit_started = True
+                await session.commit()
+        except asyncio.CancelledError:
+            if is_paper and commit_started and job_id is not None:
+                raise QueueSubmissionCancelledError(job_id) from None
+            raise
+        except Exception:
+            if is_paper and commit_started and job_id is not None:
+                raise QueueSubmissionError(job_id) from None
+            raise
 
         # Push to Redis queue
-        r = await self._get_redis()
-        await r.rpush(self.queue_key, job_id)
+        try:
+            r = await self._get_redis()
+            await r.rpush(self.queue_key, job_id)
+        except asyncio.CancelledError:
+            if is_paper:
+                raise QueueSubmissionCancelledError(job_id) from None
+            raise
+        except Exception:
+            if is_paper:
+                try:
+                    async with db_session.session_manager.session() as session:
+                        service = IngestionService(session)
+                        await service.mark_failed(
+                            job_id, "The job could not be queued. Retry the stored upload."
+                        )
+                        await session.commit()
+                except Exception:  # noqa: BLE001 - retain persisted ownership on storage failure
+                    logger.warning("Persisted job publication status unavailable: %s", job_id)
+                raise QueueSubmissionError(job_id) from None
+            if (meta or {}).get("workflow"):
+                async with db_session.session_manager.session() as session:
+                    service = IngestionService(session)
+                    await service.mark_failed(
+                        job_id, "The job could not be queued. Retry the stored upload."
+                    )
+                    await session.commit()
+            raise
         logger.info("Enqueued job %s to Redis for file %s", job_id, file_path)
         return job_id
+
+    async def requeue(self, job_id: str) -> None:
+        """Re-enqueue an already authorized persisted job without creating a new row."""
+        r = await self._get_redis()
+        await r.rpush(self.queue_key, job_id)
 
     async def start_worker(self) -> None:
         """Start concurrent worker coroutines."""
@@ -136,9 +182,7 @@ class RedisIngestionQueue:
         self.is_running = True
 
         for i in range(self.concurrency):
-            task = asyncio.create_task(
-                self._worker(worker_id=i), name=f"redis-worker-{i}"
-            )
+            task = asyncio.create_task(self._worker(worker_id=i), name=f"redis-worker-{i}")
             self._worker_tasks.append(task)
 
         logger.info(
@@ -198,11 +242,21 @@ class RedisIngestionQueue:
 
             except asyncio.CancelledError:
                 break
-            except Exception as e:
-                logger.error("Worker %d loop error: %s", worker_id, e, exc_info=True)
+            except Exception:
+                logger.exception("Worker %d loop error", worker_id)
                 await asyncio.sleep(1)
 
     async def _process_job(self, job_id: str, worker_id: int) -> None:
+        """Process a consumed job and recover PAPER ownership during graceful cancellation."""
+        try:
+            await self._run_job(job_id, worker_id)
+        except asyncio.CancelledError:
+            await recover_interrupted_workflow(
+                job_id, self.requeue, service_factory=IngestionService
+            )
+            raise
+
+    async def _run_job(self, job_id: str, worker_id: int) -> None:
         """Process a single job with retry logic.
 
         Args:
@@ -226,56 +280,82 @@ class RedisIngestionQueue:
             start_page = meta.get("start_page")
             end_page = meta.get("end_page")
 
+        result = None
         try:
-            logger.info(
-                "Worker %d processing job %s: %s", worker_id, job_id, file_path
-            )
+            file_path = str(await resolve_upload_path(file_path))
+            logger.info("Worker %d processing job %s: %s", worker_id, job_id, file_path)
 
             # GPU semaphore gates inference concurrency
             async with self._gpu_semaphore:
-                import inspect
+                workflow = meta.get("workflow")
+                if workflow:
+                    handler = self.workflow_handlers.get(workflow)
+                    if handler is None:
+                        raise ValueError("Queued workflow is unavailable.")
+                    result = await handler(file_path, dict(meta))
+                else:
+                    import inspect
 
-                sig = inspect.signature(self.processing_function)
-                kwargs: Dict[str, Any] = {}
-                if "api_keys" in sig.parameters:
-                    kwargs["api_keys"] = api_keys
-                if "start_page" in sig.parameters:
-                    kwargs["start_page"] = start_page
-                if "end_page" in sig.parameters:
-                    kwargs["end_page"] = end_page
+                    sig = inspect.signature(self.processing_function)
+                    kwargs: dict[str, Any] = {}
+                    if "api_keys" in sig.parameters:
+                        kwargs["api_keys"] = api_keys
+                    if "start_page" in sig.parameters:
+                        kwargs["start_page"] = start_page
+                    if "end_page" in sig.parameters:
+                        kwargs["end_page"] = end_page
 
-                result = await self.processing_function(
-                    file_path, model_id, **kwargs
-                )
+                    result = await self.processing_function(file_path, model_id, **kwargs)
 
             # Success — persist result
             async with db_session.session_manager.session() as session:
                 service = IngestionService(session)
                 await service.mark_completed(
-                    job_id, {"result_summary": str(result)[:200] + "..."}
+                    job_id,
+                    (
+                        result.get("job_metadata", {})
+                        if workflow
+                        else {"result_summary": str(result)[:200] + "..."}
+                    ),
                 )
                 doc_service = DocumentService(session)
                 await doc_service.create_document(
                     job_id=job_id,
-                    filename=Path(file_path).name,
+                    filename=meta.get("original_filename") or Path(file_path).name,
                     content=result,
                     tenant_id=tenant_id,
                 )
+                if isinstance(result, QueuedWorkflowResult):
+                    result.release_artifact()
                 await session.commit()
 
             # Clear retry counter on success
-            r = await self._get_redis()
-            await r.delete(f"{self.retry_key_prefix}{job_id}")
+            try:
+                r = await self._get_redis()
+                await r.delete(f"{self.retry_key_prefix}{job_id}")
+            except Exception:  # noqa: BLE001 - completion cannot fail on best-effort cleanup
+                # Completion is already committed. Housekeeping cannot turn it
+                # back into a failed/pending job or trigger another inference.
+                logger.warning("Completed job retry counter cleanup failed: %s", job_id)
 
             logger.info("Worker %d completed job %s", worker_id, job_id)
 
+        except asyncio.CancelledError:
+            if isinstance(result, QueuedWorkflowResult):
+                await result.discard_uncommitted_artifact()
+            raise
         except Exception as e:
-            logger.error(
-                "Worker %d failed job %s: %s", worker_id, job_id, e, exc_info=True
-            )
-            await self._handle_failure(job_id, str(e))
+            if isinstance(result, QueuedWorkflowResult):
+                await result.discard_uncommitted_artifact()
+            logger.exception("Worker %d failed job %s", worker_id, job_id)
+            if meta.get("workflow"):
+                await self._handle_failure(job_id, str(e), workflow=meta["workflow"])
+            else:
+                await self._handle_failure(job_id, str(e))
 
-    async def _handle_failure(self, job_id: str, error_msg: str) -> None:
+    async def _handle_failure(
+        self, job_id: str, error_msg: str, *, workflow: str | None = None
+    ) -> None:
         """Handle job failure with exponential backoff and dead letter queue.
 
         Args:
@@ -324,14 +404,19 @@ class RedisIngestionQueue:
             )
             await asyncio.sleep(backoff)
 
-            # Re-enqueue for retry
-            await r.rpush(self.queue_key, job_id)
-
-            # Mark as failed in DB (will be set back to PROCESSING on retry)
+            # Persist retry state before publishing the ID: another worker may
+            # consume it immediately and must not have PROCESSING overwritten.
             if db_session.session_manager:
                 async with db_session.session_manager.session() as session:
                     service = IngestionService(session)
-                    await service.mark_failed(
-                        job_id, f"Retry {retry_count}/{MAX_RETRIES}: {error_msg}"
-                    )
+                    if workflow:
+                        await service.update_status(
+                            job_id, IngestionStatus.PENDING, {"retry_count": retry_count}
+                        )
+                    else:
+                        await service.mark_failed(
+                            job_id, f"Retry {retry_count}/{MAX_RETRIES}: {error_msg}"
+                        )
                     await session.commit()
+
+            await r.rpush(self.queue_key, job_id)

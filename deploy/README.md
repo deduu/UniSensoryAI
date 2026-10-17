@@ -3,6 +3,13 @@
 This folder bundles the production overlay for hosting UniSensoryAI on a
 single small VPS. The frontend ships separately to Cloudflare Pages.
 
+For the local four-service development stack, use `docker compose up --build`;
+see the root README. The production overlay requires Docker Compose 2.24.4+
+for explicit port/mount replacement. It excludes the local Vite service and
+source/data bind mounts, keeps the production uploads volume, and builds the
+`runtime` image target. Apply migrations with the command below before initial
+API startup can complete. Cloudflare Pages still hosts the production frontend.
+
 **Target cost:** ~$5/mo VPS + ~$10/yr domain + variable VLM token spend.
 
 ## Architecture

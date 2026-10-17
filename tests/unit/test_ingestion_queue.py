@@ -2,9 +2,18 @@
 
 import pytest
 import asyncio
+from pathlib import Path
 from unittest.mock import AsyncMock, patch, MagicMock
 from src.ingestion.queue_manager import IngestionQueue
 from src.db.models.ingestion import IngestionJob, IngestionStatus
+
+
+@pytest.fixture(autouse=True)
+def stored_upload_files(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Worker tests use real uploads while mocking database and inference I/O."""
+    monkeypatch.setenv("UPLOADS_DIR", str(tmp_path))
+    for filename in ("test.pdf", "error.pdf", "doc.pdf"):
+        (tmp_path / filename).write_bytes(b"document source")
 
 
 @pytest.mark.asyncio
@@ -92,7 +101,7 @@ async def test_ingestion_queue_worker_error():
 
 
 @pytest.mark.asyncio
-async def test_worker_passes_model_id_from_meta():
+async def test_worker_passes_model_id_from_meta(tmp_path):
     """Worker should extract model_id from job.meta and pass to processing_function."""
     with patch("src.db.session.session_manager") as mock_manager:
         mock_session = AsyncMock()
@@ -122,13 +131,13 @@ async def test_worker_passes_model_id_from_meta():
                 await queue.start_worker()
                 await asyncio.sleep(0.2)
 
-                processor_mock.assert_called_once_with("doc.pdf", "gpt-4o")
+                processor_mock.assert_called_once_with(str((tmp_path / "doc.pdf").resolve()), "gpt-4o")
 
                 await queue.stop_worker()
 
 
 @pytest.mark.asyncio
-async def test_worker_defaults_model_id_when_missing():
+async def test_worker_defaults_model_id_when_missing(tmp_path):
     """Worker should use default model_id when meta has no model_id."""
     with patch("src.db.session.session_manager") as mock_manager:
         mock_session = AsyncMock()
@@ -158,6 +167,8 @@ async def test_worker_defaults_model_id_when_missing():
                 await queue.start_worker()
                 await asyncio.sleep(0.2)
 
-                processor_mock.assert_called_once_with("doc.pdf", "qwen2-vl-2b-instruct")
+                processor_mock.assert_called_once_with(
+                    str((tmp_path / "doc.pdf").resolve()), "qwen2-vl-2b-instruct"
+                )
 
                 await queue.stop_worker()

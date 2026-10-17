@@ -1,24 +1,34 @@
 settings:
   field_attempts: 2
+  evidence_repair_attempts: 2
+  field_review_batch_size: 0  # Opt in with a small batch, e.g. 2, for long-document review.
+  field_review_schema_ids: []  # Empty permits any schema when review is explicitly enabled.
+  field_review_max_batches: 16
+  field_review_max_source_blocks: 8
+  field_review_max_source_chunks: 16
   max_output_tokens: 4096
   calls_per_second: 10
   inference_timeout_seconds: 60
 
-# Replace model_id values with models available at your chosen endpoint.
-# Set EXTRACTION_CONFIG_PATH to this file after configuring it.
+# Set EXTRACTION_CONFIG_PATH to this file after configuring the environment.
+# Explicit ${NAME} placeholders require nonempty environment values.
+# Profiles can use different endpoints and models, including local compatible servers.
+# API keys are resolved only through api_key_env and are never stored in YAML.
 profiles:
   vision:
     provider: openai_compatible
-    model_id: your-vision-model
-    base_url: https://your-provider.example/v1
+    connect_retries: 2  # Only connection establishment; 0 disables, maximum 3.
+    model_id: ${EXTRACTION_VISION_MODEL}
+    base_url: ${EXTRACTION_VISION_BASE_URL}
     api_key_env: EXTRACTION_API_KEY
     supports_images: true
     max_input_chars: 48000
     max_images: 1
   fields:
     provider: openai_compatible
-    model_id: your-text-model
-    base_url: https://your-provider.example/v1
+    connect_retries: 2
+    model_id: ${EXTRACTION_FIELDS_MODEL}
+    base_url: ${EXTRACTION_FIELDS_BASE_URL}
     api_key_env: EXTRACTION_API_KEY
     supports_images: false
     supports_native_json: false

@@ -16,7 +16,6 @@ _MOCK_MODULES = [
     "torchvision", "torchvision.transforms",
     "transformers", "accelerate", "bitsandbytes",
     "nvitop",
-    "fitz", "pymupdf", "pymupdf.extra", "pymupdf._extra",
 ]
 for mod in _MOCK_MODULES:
     if mod not in sys.modules:
@@ -144,9 +143,11 @@ class TestRedisIngestionQueue:
 
     @pytest.mark.asyncio
     async def test_process_job_success_clears_retry_counter(
-        self, queue, mock_redis
+        self, queue, mock_redis, monkeypatch, tmp_path
     ):
         """Successful processing should delete the retry counter."""
+        monkeypatch.setenv("UPLOADS_DIR", str(tmp_path))
+        (tmp_path / "test.pdf").write_bytes(b"document source")
         with patch("src.db.session.session_manager") as mock_manager:
             mock_session = AsyncMock()
             mock_manager.session.return_value.__aenter__.return_value = mock_session

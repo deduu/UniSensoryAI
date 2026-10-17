@@ -22,6 +22,12 @@ class ExtractionSettings(_Contract):
         "Never invent required values. Keep lists in source order. Do not summarize."
     )
     field_attempts: int = Field(default=2, ge=1, le=3)
+    evidence_repair_attempts: int = Field(default=2, ge=0, le=3)
+    field_review_batch_size: int = Field(default=0, ge=0, le=8)
+    field_review_schema_ids: tuple[str, ...] = Field(default=(), max_length=128)
+    field_review_max_batches: int = Field(default=16, ge=1, le=64)
+    field_review_max_source_blocks: int = Field(default=8, ge=1, le=32)
+    field_review_max_source_chunks: int = Field(default=16, ge=1, le=64)
     max_output_tokens: int = Field(default=4096, ge=1, le=32768)
     page_separator: str = "\n\n--- PAGE BREAK ---\n\n"
     calls_per_second: int = Field(default=10, ge=1, le=10)

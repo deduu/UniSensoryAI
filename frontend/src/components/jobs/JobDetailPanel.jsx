@@ -6,6 +6,9 @@ import { useJobPolling } from '../../hooks/useJobPolling'
 import { useApp } from '../../context/AppContext'
 import { useJobs } from '../../context/JobContext'
 import { deleteJob, retryJob } from '../../api/jobs'
+import { API_BASE } from '../../api/client'
+import { Link } from 'react-router-dom'
+import { modelDescription, modelLabel } from '../../jobs/presentation'
 
 export default function JobDetailPanel({ job, onClose }) {
   const { backendUrl } = useApp()
@@ -21,6 +24,7 @@ export default function JobDetailPanel({ job, onClose }) {
   if (!job) return null
 
   const isFailed = job.status === 'failed'
+  const isPaper = job.meta?.workflow === 'paper_extraction'
 
   async function handleRetry() {
     setRetrying(true)
@@ -81,7 +85,8 @@ export default function JobDetailPanel({ job, onClose }) {
 
           <div>
             <label className="text-xs font-semibold uppercase text-ink-muted">Model</label>
-            <p className="mt-1 text-sm text-ink">{job.model_id || '—'}</p>
+            <p title={modelDescription(job)} className="mt-1 break-words text-sm text-ink">{modelLabel(job)}</p>
+            <p className="mt-1 text-xs text-ink-muted">{modelDescription(job)}</p>
           </div>
 
           <div>
@@ -106,17 +111,19 @@ export default function JobDetailPanel({ job, onClose }) {
 
           {/* Action buttons */}
           <div className="flex gap-3 border-t border-surface-border pt-4">
-            {isFailed && (
+            {isFailed && !isPaper && (
               <Button onClick={handleRetry} loading={retrying} variant="secondary">
                 <RotateCcw className="mr-1.5 h-4 w-4" />
                 Retry
               </Button>
             )}
+            {isPaper && <Link className="inline-flex items-center rounded-lg border border-surface-border px-3 py-2 text-sm text-brand hover:bg-surface-muted" to={`/paper?extraction=${encodeURIComponent(job.job_id)}`}>Review{isFailed ? ' / retry' : ''} in PAPER</Link>}
             <Button onClick={handleDelete} loading={deleting} variant="danger">
               <Trash2 className="mr-1.5 h-4 w-4" />
               Delete
             </Button>
           </div>
+          <a href={`${backendUrl || API_BASE}/v1/jobs/${encodeURIComponent(job.job_id)}/file`} target="_blank" rel="noreferrer" className="inline-flex text-sm text-brand underline">Open original file</a>
 
           {/* Documents */}
           {job.documents?.length > 0 && (

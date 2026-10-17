@@ -22,12 +22,19 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 WORKDIR /app
 COPY pyproject.toml uv.lock ./
 
+# Optional GPU/local-model dependencies; cloud APIs work without this extra.
+ARG INSTALL_LOCAL_VLM=false
+
 # Install runtime deps only — torch/transformers/etc. live in the
 # `local-vlm` extra and are deliberately excluded from this image.
 # `--no-install-project` avoids needing the source tree at this layer
 # so dep changes alone re-use the cached layer.
 RUN uv venv /opt/venv \
-    && uv sync --frozen --no-dev --no-install-project
+    && if [ "$INSTALL_LOCAL_VLM" = "true" ]; then \
+        uv sync --frozen --no-dev --no-install-project --extra local-vlm; \
+    else \
+        uv sync --frozen --no-dev --no-install-project; \
+    fi
 
 # ──────────────────────────────────────────────────────────────────────
 # Stage 2: runtime — slim image, app code, venv copied in
@@ -63,3 +70,8 @@ EXPOSE 8010
 
 ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["uvicorn", "src.api.server:app", "--host", "0.0.0.0", "--port", "8010", "--workers", "2", "--proxy-headers", "--forwarded-allow-ips", "*"]
+
+# Local Compose matches the manual single-process API and applies migrations
+# before startup, including on a fresh database. Existing rows are retained.
+FROM runtime AS development
+CMD ["sh", "-c", "alembic upgrade head && exec python -m src.api.server"]

@@ -1,26 +1,35 @@
 import asyncio
+import logging
 import re
 import time
-import logging
+from collections.abc import Awaitable, Callable, Mapping
 from pathlib import Path
-from typing import Optional, Callable, Awaitable, Any
+from typing import Any
 
 # Import module to allow late binding of session_manager
 import src.db.session as db_session
-from ..services.ingestion import IngestionService
-from ..services.document import DocumentService
+
 from ..db.models.ingestion import IngestionStatus
+from ..services.document import DocumentService
+from ..services.ingestion import IngestionService
+from ..services.upload_storage import resolve_upload_path
+from .submission_cancelled_error import QueueSubmissionCancelledError
+from .submission_error import QueueSubmissionError
+from .workflow_recovery import recover_interrupted_workflow
+from .workflow_result import QueuedWorkflowResult
 
 logger = logging.getLogger(__name__)
+WorkflowHandler = Callable[[str, dict[str, Any]], Awaitable[dict[str, Any]]]
 
 _UUID_PREFIX = re.compile(
-    r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_',
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_",
     re.IGNORECASE,
 )
 
+
 def _strip_uuid_prefix(filename: str) -> str:
     """Remove a leading UUID prefix (e.g. ``<uuid>_original.pdf``) from a filename."""
-    return _UUID_PREFIX.sub('', filename)
+    return _UUID_PREFIX.sub("", filename)
 
 
 class RateLimiter:
@@ -55,18 +64,24 @@ class RateLimiter:
 
 
 class IngestionQueue:
-    def __init__(self, processing_function: Callable[[str, str], Awaitable[Any]]):
+    def __init__(
+        self,
+        processing_function: Callable[[str, str], Awaitable[Any]],
+        *,
+        workflow_handlers: Mapping[str, WorkflowHandler] | None = None,
+    ) -> None:
         self.queue: asyncio.Queue = asyncio.Queue()
         self.processing_function = processing_function
+        self.workflow_handlers = dict(workflow_handlers or {})
         self.is_running = False
-        self.worker_task: Optional[asyncio.Task] = None
+        self.worker_task: asyncio.Task | None = None
         # Rate limiter: 10 req/s, burst of 10
         self.outbound_limiter = RateLimiter(rate_limit=10.0, capacity=10.0)
 
     async def enqueue(
         self,
         file_path: str,
-        meta: Optional[dict] = None,
+        meta: dict | None = None,
         *,
         tenant_id: str,
     ) -> str:
@@ -77,17 +92,31 @@ class IngestionQueue:
         if db_session.session_manager is None:
             raise RuntimeError("DatabaseSessionManager is not initialized! Call init_db first.")
 
-        # Create database record
-        async with db_session.session_manager.session() as session:
-            service = IngestionService(session)
-            job = await service.create_job(file_path, meta, tenant_id=tenant_id)
-            job_id = job.id
-            await session.commit()
-
-        # Add to memory queue
-        await self.queue.put(job_id)
+        is_paper = (meta or {}).get("workflow") == "paper_extraction"
+        commit_started = False
+        job_id = None
+        try:
+            async with db_session.session_manager.session() as session:
+                service = IngestionService(session)
+                job = await service.create_job(file_path, meta, tenant_id=tenant_id)
+                job_id = job.id
+                commit_started = True
+                await session.commit()
+            await self.queue.put(job_id)
+        except asyncio.CancelledError:
+            if is_paper and commit_started and job_id is not None:
+                raise QueueSubmissionCancelledError(job_id) from None
+            raise
+        except Exception:
+            if is_paper and commit_started and job_id is not None:
+                raise QueueSubmissionError(job_id) from None
+            raise
         logger.info(f"Enqueued job {job_id} for file {file_path}")
         return job_id
+
+    async def requeue(self, job_id: str) -> None:
+        """Re-enqueue an already authorized persisted job without creating a new row."""
+        await self.queue.put(job_id)
 
     async def start_worker(self):
         if self.is_running:
@@ -108,6 +137,8 @@ class IngestionQueue:
 
     async def _worker(self):
         while self.is_running:
+            job_id = None
+            task_done = False
             try:
                 job_id = await self.queue.get()
 
@@ -115,6 +146,7 @@ class IngestionQueue:
                     logger.error("DatabaseSessionManager is None in worker loop!")
                     # Put back? or fail?
                     self.queue.task_done()  # Mark done to avoid block, effectively dropping job (safest for now)
+                    task_done = True
                     continue
 
                 async with db_session.session_manager.session() as session:
@@ -129,31 +161,47 @@ class IngestionQueue:
                     api_keys = (job.meta or {}).get("api_keys", None)
                     start_page = (job.meta or {}).get("start_page", None)
                     end_page = (job.meta or {}).get("end_page", None)
+                    metadata = dict(job.meta or {})
 
+                result = None
                 try:
+                    file_path = str(await resolve_upload_path(file_path))
                     # Apply rate limit before processing (assuming processing makes outbound calls)
                     await self.outbound_limiter.acquire()
 
                     # Process
                     # NOTE: This is where we call the actual document agent/pipeline
                     logger.info(f"Processing job {job_id}: {file_path} with model {model_id}")
-                    
-                    import inspect
-                    sig = inspect.signature(self.processing_function)
-                    kwargs = {}
-                    if "api_keys" in sig.parameters:
-                        kwargs["api_keys"] = api_keys
-                    if "start_page" in sig.parameters:
-                        kwargs["start_page"] = start_page
-                    if "end_page" in sig.parameters:
-                        kwargs["end_page"] = end_page
-                    result = await self.processing_function(file_path, model_id, **kwargs)
+
+                    workflow = metadata.get("workflow")
+                    if workflow:
+                        handler = self.workflow_handlers.get(workflow)
+                        if handler is None:
+                            raise ValueError("Queued workflow is unavailable.")
+                        result = await handler(file_path, metadata)
+                    else:
+                        import inspect
+
+                        sig = inspect.signature(self.processing_function)
+                        kwargs = {}
+                        if "api_keys" in sig.parameters:
+                            kwargs["api_keys"] = api_keys
+                        if "start_page" in sig.parameters:
+                            kwargs["start_page"] = start_page
+                        if "end_page" in sig.parameters:
+                            kwargs["end_page"] = end_page
+                        result = await self.processing_function(file_path, model_id, **kwargs)
 
                     async with db_session.session_manager.session() as session:
                         # 1. Update IngestionJob status
                         service = IngestionService(session)
                         await service.mark_completed(
-                            job_id, {"result_summary": str(result)[:200] + "..."}
+                            job_id,
+                            (
+                                result.get("job_metadata", {})
+                                if workflow
+                                else {"result_summary": str(result)[:200] + "..."}
+                            ),
                         )
 
                         # 2. Create Document record
@@ -162,7 +210,9 @@ class IngestionQueue:
                         # Fall back to stripping the UUID prefix from the stored path name
                         # for jobs submitted before this change.
                         raw_name = Path(file_path).name
-                        display_name = (job.meta or {}).get("original_filename") or _strip_uuid_prefix(raw_name)
+                        display_name = (job.meta or {}).get(
+                            "original_filename"
+                        ) or _strip_uuid_prefix(raw_name)
                         await doc_service.create_document(
                             job_id=job_id,
                             filename=display_name,
@@ -170,26 +220,42 @@ class IngestionQueue:
                             tenant_id=tenant_id,
                         )
 
+                        if isinstance(result, QueuedWorkflowResult):
+                            result.release_artifact()
                         await session.commit()
 
+                except asyncio.CancelledError:
+                    if isinstance(result, QueuedWorkflowResult):
+                        await result.discard_uncommitted_artifact()
+                    raise
                 except Exception as e:
-                    logger.error(f"Error processing job {job_id}: {e}", exc_info=True)
+                    if isinstance(result, QueuedWorkflowResult):
+                        await result.discard_uncommitted_artifact()
+                    logger.exception("Error processing job %s", job_id)
                     async with db_session.session_manager.session() as session:
                         service = IngestionService(session)
                         await service.mark_failed(job_id, str(e))
                         await session.commit()
                 finally:
                     self.queue.task_done()
+                    task_done = True
 
             except asyncio.CancelledError:
+                if job_id is not None:
+                    await recover_interrupted_workflow(
+                        job_id, self.requeue, service_factory=IngestionService
+                    )
                 break
-            except Exception as e:
-                logger.error(f"Worker loop error: {e}", exc_info=True)
+            except Exception:
+                logger.exception("Worker loop error")
                 await asyncio.sleep(1)  # Prevent tight loop on error
+            finally:
+                if job_id is not None and not task_done:
+                    self.queue.task_done()
 
 
 # Global instance integration helper
-_ingestion_queue: Optional[IngestionQueue] = None
+_ingestion_queue: IngestionQueue | None = None
 
 
 def get_ingestion_queue() -> IngestionQueue:
@@ -200,7 +266,7 @@ def get_ingestion_queue() -> IngestionQueue:
 
 def init_ingestion_queue(
     processing_func: Callable[[str, str], Awaitable[Any]],
-    backend: Optional[str] = None,
+    backend: str | None = None,
     **kwargs,
 ) -> IngestionQueue:
     """Factory function to create the appropriate queue backend.
@@ -216,10 +282,12 @@ def init_ingestion_queue(
         An IngestionQueue (memory) or RedisIngestionQueue instance.
     """
     import os
+
     if backend is None:
         backend = os.getenv("QUEUE_BACKEND", "memory")
 
     global _ingestion_queue
+    workflow_handlers = kwargs.pop("workflow_handlers", None)
 
     if backend == "redis":
         from src.ingestion.redis_queue import RedisIngestionQueue
@@ -233,6 +301,7 @@ def init_ingestion_queue(
             redis_url=redis_url,
             concurrency=concurrency,
             gpu_semaphore_limit=gpu_limit,
+            workflow_handlers=workflow_handlers,
             **kwargs,
         )
         logger.info(
@@ -242,8 +311,7 @@ def init_ingestion_queue(
             gpu_limit,
         )
     else:
-        _ingestion_queue = IngestionQueue(processing_func)
+        _ingestion_queue = IngestionQueue(processing_func, workflow_handlers=workflow_handlers)
         logger.info("Initialized in-memory queue")
 
     return _ingestion_queue
-

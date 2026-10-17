@@ -1,4 +1,402 @@
+## Publish PAPER development checkpoint — 2026-10-17
+
+- [x] Inspect repository instructions, accumulated changes and existing branch history.
+- [x] Review focused commit boundaries and exclude private, generated and local configuration artifacts.
+- [x] Run backend, frontend and deployment checks; document any existing limitations.
+- [x] Create focused checkpoint commits and inspect staged content for each commit.
+- [x] Push the checkpoint branch and verify the remote commit matches local HEAD.
+
+### Plan and scope
+
+Publish the accumulated implementation on `codex/reusable-pdf-extraction` as several focused commits. Review extraction, PAPER domain/persistence/API, frontend, deployment and documentation changes with read-only parallel help. Preserve private uploads/results and local runtime configuration; do not change business records or run model inference. Plan mode and TodoWrite are unavailable in this session, so this checklist and the initial commentary provide the planning check-in. The user's checkpoint request authorizes creating and pushing the commits.
+
+### Review
+
+- Reviewed the accumulated work and selected seven commits: parser test isolation, generic extraction reliability/provenance, PAPER domain/persistence/reconciliation, durable queued extraction/API integration, frontend review/history, deployment, and documentation. The extraction deployment YAML contains only environment placeholders and is included; synthetic developer fixtures and the synthetic UI screenshot are publishable. Added `tmp/` to ignore the generated local image. Existing ignored uploads, results, environment credentials and recovery exports stay local.
+- Declared the missing `aiosqlite` development dependency and regenerated the lockfile. Offline lock verification passes, and Alembic reports the single head `dc728f04a912`. No migrations or business-record changes were executed for publication.
+- The first combined backend run exposed 35 failures from global PyMuPDF mocks and stale converter test patches. Removed required PDF parsers from optional-model mock lists and updated tests to patch the actual `convert_hybrid` entry point. The focused mixed API/real-PDF regression run passed 82 tests. The final full suite passed **984 tests**, with **86%** coverage and five existing mock/JWT test warnings; HTML coverage remains ignored. Sandboxed async runs stalled, so successful Python verification used authorized execution outside the sandbox.
+- All **69 frontend tests** and the production Vite build pass. Explicit JSX, undefined-variable and React-hook checks have zero errors and one ref-cleanup warning. Development, production with all profiles, and GPU Compose configurations validate; production hostname/email variables are unset locally, as expected. Existing Browserslist age and bundle-size advisories remain.
+- All **115 new Python files** pass Ruff and Black/isort checks. Strict mypy passes for **70 changed extraction/new PAPER source files**. Broader lint/type checks expose existing-pattern debt in legacy API/model-export/test modules and the unchanged PDF reader's third-party typing annotations; the standard frontend lint script also lacks an ESLint configuration. These checks are reported separately from the passing scoped checks. SQLite integration tests do not establish PostgreSQL concurrency behavior.
+- Converted machine-specific documentation links to portable repository references and aligned README review/edit wording with the UI. The final index audit covered 232 changed paths (about 1.95 MB), finding no private/generated paths, oversized artifacts or credential signatures. Cached and cumulative whitespace checks pass.
+- Published the six implementation commits through `4962b41` to `origin/codex/reusable-pdf-extraction`, established branch tracking, and verified the remote hash equals local HEAD. This seventh documentation commit records the verified publication and validation results before the final push. Main was not updated.
+
+## Remove PAPER dummy examples — 2026-10-16
+
+- [x] Inventory saved demo records and confirm ownership/dependencies without exposing private contents.
+- [x] Export an exact local recovery backup, remove only verified synthetic PAPER records in one transaction, and verify real data is unchanged.
+- [x] Remove web sample/scenario/approval-prefill controls while preserving empty manual forms, extraction review and developer regression fixtures.
+- [x] Verify lists and ordinary UI flows, run frontend checks/build, and update documentation and lessons.
+
+### Plan and scope
+
+The screenshot identifies saved DEMO invoice cases. Inspect the local development tenant's agreements, case versions, decisions and duplicate claims; include only records whose synthetic identity/provenance is verified. Keep an ignored local recovery export before cleanup, validate dependent references, and fingerprint retained rows and source files. Preserve real PDF uploads/extractions and test fixtures in source control. Remove production-facing example creation controls so the lists remain clear. Root owns database cleanup and final verification; delegated frontend work follows AGENTS.md. Plan mode/TodoWrite are unavailable; this checklist and initial commentary serve as the planning check-in.
+
+### Review
+
+- Confirmed four generated DEMO agreement identities and all seven saved DEMO invoice cases, using synthetic source IDs/reasons as well as identity prefixes. Preserved the additional agreement 65 (four versions and one approval), because it references the user's original PDF even though its vendor/store identifiers are `test`.
+- Exported 42 dependent rows to ignored data/runtime/paper-demo-backup-20261016T165543344938Z.json before mutation: four agreements, five agreement versions, four approvals, seven invoice cases, nine invoice versions, five AP decisions and eight duplicate claims. Removed those rows in one serializable local database transaction, with tenant/identity/provenance/reference guards. Proved recovery by restoring the backup inside a savepoint, verifying the original full PAPER snapshot, then rolling back that savepoint before committing cleanup. Recovery instructions and an adjacent result report are retained locally.
+- Fingerprinted all retained PAPER rows, seven unrelated database tables and all 19 uploaded source/result files. They match after cleanup and again after browser QA. No real upload, source evidence, real agreement history, account or reviewer permission was removed or edited.
+- Removed production-facing agreement/monthly/installment loaders, invoice scenario helpers, synthetic invoice-to-tax copying and approval autofill. New draft now always opens an empty agreement; New invoice package retains optional selected identity but starts document fields empty. Manual forms, extraction handoffs, typed JSON import, blank withholding-certificate entry, validation, reconciliation and approval handlers remain. Developer JSON fixtures and automated tests stay isolated from the web UI.
+- All 69 frontend tests, focused JSX/hooks/undefined-variable lint, the production build and whitespace checks pass. Existing Browserslist age and large-bundle advisories remain. Live UI confirms no demo case rows or sample controls, a single preserved agreement labelled 65, blank new agreement/invoice fields, and a blank withholding entry without fabricated amounts or source IDs. Temporary local forms were cancelled without saving. The 355px layout has no horizontal overflow; screenshot retained in ignored data/runtime/paper-real-sample/paper-demo-cleanup-ui.png. Updated the UI guide and lessons.
+
+## Integrated document review evidence inspector — 2026-10-16
+
+- [x] Design always-accessible evidence, warnings and source references without a long footer or lost editor position.
+- [x] Write failing regressions for field/page/search filtering, retaining exact and unresolved citations without mutating source data.
+- [x] Add a shared persistent review dock with contextual field evidence, multi-page source navigation and return-to-field access.
+- [x] Integrate agreement source review and preserve manual, invoice and approval workflows, unsaved editors and document identity checks.
+- [x] Verify desktop/compact accessibility, scroll behavior, frontend tests/build, and update documentation and lessons.
+
+### Plan and scope
+
+Replace the bottom-of-document evidence disclosures and duplicated agreement Source review footer with one shared review inspector. Keep a compact dock accessible while scrolling, opening a bounded non-modal panel for evidence, warnings or source references. A field source shortcut will reveal its citations alongside the original, retain all linked pages and provide Back to field. Support all/page and text filtering without guessing missing links. Preserve mounted editors, native validation, document-qualified evidence, warning visibility and separate save/approval actions. No model, API, extraction rerun or business-record changes are needed. Plan mode/TodoWrite are unavailable; this written plan and commentary provide the planning check-in. Use focused parallel help under AGENTS.md; root owns integration, build and browser verification.
+
+### Review
+
+- Replaced the inline warning/evidence footer and duplicate saved-agreement Source review footer with a shared persistent Review tools dock. Its Evidence, Warnings and Sources panels are non-modal, bounded and independently scrollable, including on compact screens. Saved agreements retain exact JSON separately and reserve space below controls for the dock.
+- Per-field Evidence opens exact and descendant quotations in place. Page shortcuts reveal the PDF with the same field evidence, retaining every linked page. Back to field restores the mounted complete-field editor, focus, disclosure and position. Escape/close returns keyboard focus to the toolbar. Search/current-page filters retain original items and keep unlinked sources explicit; viewing warnings never acknowledges them for approval.
+- The helper tests failed on the missing new export before implementation. All 69 frontend tests, scoped JSX/hooks/undefined-variable lint, final production build and whitespace checks pass. Existing Browserslist age and large-bundle advisories remain. No backend/model/schema or business-rule changes were made.
+- Live browser checks at 1440×1000 and the normal 355×884 viewport verified persistent positioning while scrolling, no horizontal page overflow, multi-page payment evidence (pages 9 and 10), exact-page filtering, an empty search state, all 42 retained unique agreement warnings and source references, missing rent-type evidence without a guessed page, Escape focus return, and Back to field. Scalar draft edits and unapplied JSON survived evidence/page round trips; temporary test edits were restored.
+- Invoice review exposes all nine retained citations to page 1. Stage switches show only one active dock and keep both local editors mounted. No agreement/invoice was saved, approved, reconciled, uploaded or re-extracted in this task. The existing explicit warning acknowledgement remains in the approval form. The final viewport override is reset; screenshots are retained in ignored data/runtime/paper-real-sample/paper-evidence-inspector-{desktop,compact}.png. The usage guide and lessons now describe the inspector.
+## PAPER review actions, repository navigation and field source shortcuts — 2026-10-16
+
+- [x] Trace extraction-to-draft handoff and make Review / edit, Save draft version, and Rent Agreement Master Repository discoverable.
+- [x] Add test-first exact field-to-page projection covering multiple citations, nested fields and unresolved/foreign evidence.
+- [x] Add accessible source shortcuts beside extracted and editable fields; preserve complete-field context and unsaved edits when jumping to a source.
+- [x] Verify existing flows, overwrite protection and approval gates with frontend checks and live desktop/compact browser testing.
+- [x] Update the user testing guide and capture verification results and lessons.
+
+### Plan and scope
+
+The current Prepare / Load handoff makes a read-only extraction look like the end of the workflow. Use an explicit Review / edit action to open a local editor directly when no unsaved editor exists, retaining explicit replacement choice if one does. Label the master repository in navigation and the workspace, show save controls near the editor entry, and keep saving separate from approval. Add generic JSON-pointer-based source shortcuts for scalar and structured fields, aggregate every exact page citation, and state missing/unresolved links without inventing pages. A field-source jump keeps the complete field/editor view mounted while updating the original; ordinary next/previous navigation continues synchronized page review. Preserve API/model contracts, saved records and all warnings. Plan mode/TodoWrite are unavailable; this plan and the initial commentary are the planning check-in. Focused delegated work follows AGENTS.md; one owner runs builds.
+
+### Review
+
+- Replaced the two-step Prepare/Load handoff with explicit Review / edit actions at the result and All fields. A new local editor opens directly; repeated requests preserve unsaved agreement/invoice work until an explicit replace/keep choice. A consumed request cannot reopen itself after cancel or save.
+- Named the Agreement master stage and Rent Agreement Master Repository, retained a visible local-unsaved badge, and placed Save draft version at the editor top and bottom with native validation. Saved versions expose separate approval/history, preserving authority and approval gates.
+- Added shared model/schema-agnostic field source controls backed by exact JSON pointers and source IDs. Single-page shortcuts open the PDF directly; multi-page controls show all unique sorted pages, including descendant citations. Missing or ambiguous links remain explicit. Source jumps preserve All fields/Edit all fields and mounted unsaved inputs, reveal/focus the compact Original pane, and respect reduced motion. Supporting document editors use their own evidence and exact source identity.
+- Test-first helper regressions failed before implementation, then passed. All 64 frontend tests, scoped JSX/React-hook/undefined-variable checks, final production Vite build and whitespace checks passed. Existing Browserslist and bundle-size advisories remain.
+- Live UI checks passed at 1440px desktop and the normal 355px viewport without horizontal page overflow: scalar source page 7, a field with eight pages including page 24, preserved complete-field scope, native top-save validation, one-shot cancellation, replace/keep protection in both workflows, and no inherited invoice citations on an added tax document. Saved one separate synthetic draft, DEMO-RA-2026-90c2aace v1, to verify repository persistence; left it unapproved. No real agreement/invoice was saved, approved, reconciled or re-extracted. Screenshots retained in ignored data/runtime/paper-real-sample/; the user guide reflects the new flow. Browser console has no errors, and the temporary viewport override was reset.
+- Read-only integrity follow-up: all currently listed original PDFs match their saved source hashes, and all 17 available preexisting baseline snapshots match. The older 19-resource fixture references one historical extraction (96656909-eacb-41b7-b66f-92d8d0f06f41) and its hash that are absent from the current API (404); the six-item history was already present at turn start. No deletion was performed in this task. The full older fixture therefore cannot pass; this preexisting history gap is separate from the verified UI changes.
+
 # UniSensoryAI — Project Roadmap
+
+## Document model provenance and related UI consistency — 2026-10-16
+
+- [x] Trace saved model provenance through extraction, job APIs, shared history, and document views; reproduce missing labels in the live app.
+- [x] Add failing regressions for model provenance, historical records, and related document/history presentation gaps.
+- [x] Implement a shared, honest model display and persist available extraction provenance without guessing historical models.
+- [x] Verify dashboard, document detail, upload history, and relevant PAPER screens; run focused backend/frontend checks and production build.
+- [x] Record results, limitations, and lessons from the correction.
+
+### Plan and scope
+
+Repair the reported missing model labels and directly related inconsistencies while preserving existing uncommitted work and saved documents. Audit backend provenance and frontend presentation in parallel, then add focused regressions before changes. Prefer stored per-stage provenance over the current model selector or deployment defaults; records lacking historical identity must say so clearly. Plan mode and TodoWrite are unavailable in this session, so this written plan and commentary provide the planning check-in. No model reruns or business-data edits are needed for diagnosis.
+
+### Review
+
+- Root cause: PAPER extraction discarded the model identities returned by document and field capabilities, and completed-job metadata retained only extraction counts/status. Model identities now survive successful OCR/vision, field extraction, retries and review/repair results, queue persistence, and reopened history. Multiple identities are deduplicated in call order; native-only results may correctly contain none. API contracts are additive and require no database migration.
+- Shared frontend presentation now renders saved identities consistently in the dashboard, document viewer/inspector, upload history and PAPER extraction details. The six existing uploads have no recorded historical identity and show Not recorded with an explanation. New results with explicitly empty provenance show No model recorded; pending PAPER jobs show Server configured. The current upload selector is never used to identify old runs.
+- Fixed document metadata propagation (pages, file size, timestamps and model identity), full job refresh/polling updates, authenticated viewer refresh through the default proxy, exact document selection within multi-document jobs, and stale viewer/policy snapshots when changing documents. Chat with document now consumes a scoped, validated document handoff once; manually deselecting context stays deselected. Corrected the dashboard total tooltip and Chat browser title.
+- Found and fixed a desktop layout gap during visual review: idle tips no longer consume the document workspace after history exists, and table columns retain readable document/model widths with contained horizontal scrolling on compact screens. Filename hover text exposes truncated names. Verified at 1280px and 900px with no horizontal page overflow; the temporary viewport override was reset.
+- Verification: 61 frontend tests and 154 focused backend tests passed. New provenance and Chat regressions were observed failing before implementation. Production Vite build, scoped React-hook/undefined-variable checks, backend Ruff/Black/isort, scoped strict mypy and whitespace checks passed. Existing Browserslist/bundle-size advisories and three preexisting policy API mock warnings remain.
+- Live checks passed for all six historical dashboard rows, exact next-document navigation and metadata, original PDF rendering, document inspector, upload-history details, PAPER extraction provenance, and document-to-Chat context with persistent manual deselection. Restarted only the local API after confirming zero active jobs; health, saved-job count and additive OpenAPI fields passed. No extraction was rerun, no chat was sent, and no saved business data was edited.
+- Limits: historical model identities cannot be recovered from these records. Provenance describes retained successful results; a field stage that raises without returning a result cannot contribute its discarded intermediate call identities. Existing unrelated working-tree changes were preserved. No commit or push was requested.
+
+## PAPER synchronized page review and compact layout — 2026-10-15
+
+- [x] Add failing regressions for page-scoped text and canonical evidence selection, including missing pages and ambiguous/foreign citations.
+- [x] Drive original and extracted page content from one page state, with an explicit complete-field editor that preserves unsaved changes.
+- [x] Use compact responsive upload controls/history cards and multiple columns for short extracted values.
+- [x] Verify page navigation, evidence links, draft preservation and responsive layout in the live UI; run frontend tests/build and record results.
+
+### Plan and scope
+
+The current page controls change only the original image; the extracted panel has no page scope. Add a deterministic projection of stored page content and exact evidence links, using no new model calls or backend changes. Default extraction review to the current page, retain a clearly labelled All fields view, and keep editable drafts mounted across view changes. Scope field references to the owning source document and do not guess missing page links. Use available width for short controls/history cards and canonical values while keeping long prose and narrow layouts readable. Plan mode/TodoWrite are unavailable; this written plan and initial commentary provide the planning check-in. Root owns page synchronization and integration; a focused agent owns compact upload/history layout.
+
+### Review
+
+- Added a deterministic stored-page projection with exact document-qualified evidence, nested JSON Pointer values and explicit missing-page/unlinked-evidence states. Four new regressions were observed failing before implementation and now pass, including ambiguous and foreign links, unchanged input snapshots, current draft values and safe null/zero/missing property handling.
+- Both original and extracted page controls now update one selection. This page shows recovered text, tables, visual asset counts and only fields whose citations resolve to that page; All fields retains the complete extraction. Drafts open in Edit all fields and stay mounted while page review is selected. Page changes reset both pane scroll positions; desktop comparison panes have equal bounded heights. Warning counts and full evidence remain accessible.
+- Moved extraction options into the responsive upload row and replaced full-width history rows with a responsive card grid. Short canonical values use available columns while long text/structured values span the grid. Unknown/null values do not force a full row. Compact scope buttons fit together without horizontal overflow.
+- Live supplied-agreement checks passed: page 7→8 changes recovered text (1,743→1,543 characters) and linked fields (lease dates→renewal terms); extracted previous returns the original to 7. Both next buttons disable on page 38. A temporary unsaved identity survived source-page switching and returning to the full editor; the real draft was cancelled without saving. Desktop 1600px has four history columns, four upload-control columns and two short-field columns; 900px and restored normal 355px layouts fit without horizontal page overflow. Mobile Original/Extracted and keyboard page navigation stay synchronized, and extraction options stay within viewport bounds.
+- Verification: 52 frontend tests pass; scoped JSX/React-hook lint and whitespace checks pass; production build passes with existing Browserslist/bundle advisories. A read-only peer review found and confirmed the null-span fix. Updated the testing guide. No backend, schema, model, persisted-source or approval behavior changed, and no extraction was rerun. Screenshots are retained under ignored data/runtime/paper-real-sample/paper-compact-history.png and paper-synchronized-page-review.png. Temporary viewport overrides are reset before handoff.
+
+## PAPER guided UI and interaction polish — 2026-10-15
+
+- [x] Inspect the current screens and define a simpler task-focused navigation without losing unsaved editors.
+- [x] Separate document review, agreement approval and invoice reconciliation into clear workspace stages.
+- [x] Apply progressive disclosure to field guidance, technical metadata, advanced inputs and synthetic testing tools; keep evidence, blockers and explicit approval requirements discoverable.
+- [x] Add purposeful transitions, loading/status feedback and reduced-motion support using existing dependencies.
+- [x] Verify stage switching, form preservation, evidence navigation and approval gates in desktop and compact layouts; run frontend tests/build and document results.
+
+### Plan and scope
+
+Polish the existing PAPER interface while preserving API/domain behavior and persisted records. Keep every workspace mounted across stage changes, move long implementation-facing explanations and developer tools behind labelled disclosures, and show the next useful action near the relevant result. Retain visible warning counts and decision blockers; do not auto-acknowledge exceptions or remove source inspection. Reuse the current design tokens and CSS transitions, with keyboard focus and reduced-motion support. Plan mode/TodoWrite are unavailable; this plan and the initial commentary provide the planning check-in. Focused agents own extraction/source presentation and agreement/invoice presentation; root owns the guided shell, shared motion/styles, integration and live verification.
+
+### Review
+
+- Added three keyboard-accessible stages: Documents, Agreements and Invoices. Extraction handoff and Use for invoice move to the relevant stage and focus its content. Workspaces stay mounted so switching stages preserves unsaved editors; reload still requires saving. Existing account/tenant/backend scope remounts remain in AppShell.
+- Simplified upload/history cards, grouped agreement terms with a fallback for additional external schema fields, and added concise invoice payment summaries. Moved schema guidance, IDs, full OCR/downloads, JSON and synthetic tools into labelled disclosures. Warning counts, source discrepancies, payment conditions and explicit approval acknowledgements remain available. No models, API contracts, migrations or reconciliation rules changed.
+- Added brief stage/disclosure transitions, interactive feedback and real loading indicators using CSS and existing icons. All PAPER motion has a reduced-motion override. Invalid controls reopen every containing disclosure and receive native focus; citation jumps reveal the compact original pane before scrolling.
+- Verified the real-source result warning count, original page rendering and citation navigation, plus an extracted-to-editable agreement handoff. A temporary unsaved identity survived stage changes and keyboard navigation; that real draft was cancelled without saving. Desktop 1440px and normal compact 355px layouts have no horizontal page overflow, and the temporary viewport was reset.
+- Passed a fresh synthetic full flow: DEMO-INSTALLMENT-2026-f52bb302 saved/approved, DEMO-INV-2b89f8ef reconciled to three review findings, approval disabled with reason alone, then enabled only after all three explicit acknowledgements and recorded successfully. Nested hidden-required-field validation was tested before saving. Read-only integrity verification confirms all 19 preexisting resource snapshots and original PDF hashes are unchanged.
+- Verification: 48 frontend tests pass; scoped JSX/React hook checks and whitespace checks pass. Production build passes with existing Browserslist/bundle-size advisories. Updated documentation/PAPER_UI_TESTING.md for the new navigation. Screenshot proof is saved under ignored data/runtime/paper-real-sample/paper-guided-workspace-desktop.png. No commit/push was requested.
+
+## Installment and withholding reconciliation with UI review — 2026-10-15
+
+- [x] Inspect current pricing, tax, authority, duplicate claims and UI boundaries; agree backward-compatible typed contracts.
+- [x] Write failing tests, then implement configurable deterministic installment and withholding checks with reviewed policy/rounding.
+- [x] Prevent repeat billing of the same installment across different invoice numbers using atomic tenant-scoped claims.
+- [x] Add editable agreement schedules, invoice installment/tax components, clear findings and a separate synthetic full-flow UI example.
+- [x] Validate the supplied agreement/invoice mapping without inventing bank details, host identifiers, tax attachments or source periods.
+- [x] Run backend/frontend regressions, live UI end-to-end checks and document the exact test flow and remaining source requirements.
+
+### Plan and scope
+
+Add optional typed terms and versioned pure reconciliation rules behind existing injection ports. Preserve signed legacy tax amounts, existing monthly/per-invoice comparison and approval/version/history behavior. Compare advance installments against explicitly approved schedule amounts and coverage rather than relabelling annual rent or inferring service periods from invoice dates. Keep VAT and withholding independent; use approved rate, precision, rounding and reference inputs rather than deriving tax law. Record conditional due-date/prerequisite review, retain source discrepancies, and fail safely on unknown or conflicting inputs. Add a distinct synthetic scenario for full UI testing; the real source remains unapproved until the user resolves identity, bank, documentary and policy inputs. Keep private sample artifacts ignored and untouched automated extraction history. Plan mode/TodoWrite are unavailable; this checked plan and commentary provide the planning/check-in record. Focused agents own rules, frontend and read-only adversarial review; root owns integration, atomic repeat-billing protection and live verification.
+
+### Review
+
+- Added optional typed installment schedules and independent approved withholding policies, explicit VAT/withholding/rounding components and separately recorded reviewed allocation. The injected versioned rules are pure and model agnostic; configuration enables them in this deployment while packaged/library defaults remain disabled. Existing legacy signed-tax and monthly/per-invoice behavior passes regressions. JSON snapshots require no new migration.
+- Added exact decimal checks for gross, approved rate/rounding, VAT evidence, withholding certificate identity/amount and net payable. Missing or conflicting monetary evidence blocks approval. Reviewed allocation, conditional prerequisites and the retained source discrepancy require explicit AP acknowledgement. Stable installment IDs survive amendments; only the selected obligation must fit the selected version's effective interval.
+- Reused atomic tenant-scoped duplicate claims for eligible installments across different invoice numbers and agreement versions. Both claims roll back together, losing invoice claims do not reserve another installment, and approval rechecks retained ownership. Claims remain reserved after rejection; release/cancellation is not implemented.
+- Added agreement schedule/policy editors, invoice component arithmetic, installment selection and separately explained allocation, actual-certificate input fields and a clearly synthetic demonstration. Saved IDs are locked in both normal and JSON revision paths. Existing original/evidence review remains available. Fixed intrinsic grid overflow found during actual compact-screen testing.
+- Saved separately labelled UNAPPROVED real-source mapping under ignored `data/runtime/paper-real-sample/`: schedule gross 983,333,333 + 655,555,555 = 1,638,888,888; invoice gross 983,333,333 less withholding 98,333,333 = net 885,000,000. Preserved annual source price, IDR 3 discrepancy, both contingent installment conditions and unknown source service dates. Whole-lease allocation, downward whole-Rupiah rounding and explicit zero VAT are proposed review inputs. External IDs, bank and actual certificate remain unresolved; no real master/case was saved or approved.
+- Verification: **634 selected backend tests passed**, including new rules, API/SQLite lifecycle, extraction, queues, chat and policy; four existing warnings remain. **48 frontend tests passed**, and production build passed. Scoped strict mypy, Ruff, Black/isort and whitespace checks passed. A 44-test lifecycle/storage rerun passed after final typed-access cleanup. Existing bundle-size and Browserslist build advisories remain.
+- Live local PostgreSQL/UI flow passed: saved/approved a new synthetic agreement, reconciled stage one to three review findings, explicitly acknowledged each, recorded AP approval, then submitted a different invoice number for that same installment and observed Duplicate with approval disabled. All 19 preexisting resource snapshots and original PDF hashes remain unchanged. Both saved/editor workflows fit the normal 355px viewport (347px page width); desktop 1440px also passed, and temporary viewport override was reset. API, web, PostgreSQL and Redis are healthy. The approved synthetic case remains open; screenshot saved as `paper-installment-approval-desktop.png` in ignored private runtime artifacts.
+- The rules support one complete installment per invoice. Partial splits, conditional deposit accounting, working-day deadline calculation, payment execution, SAP posting and email remain separate capabilities. The guide in `documentation/PAPER_UI_TESTING.md` documents exact UI steps, synthetic JSON examples and the required real-source review inputs. No commit/push was requested.
+
+## Agreement evidence repair, source verification and review flow — 2026-10-15
+
+- [x] Diagnose the 15 missing-evidence warnings from persisted output and actual serialized field requests.
+- [x] Add failing regressions and repair provider-neutral extraction/evidence behavior without accepting unsupported quotes.
+- [x] Rerun the real agreement as a new persisted attempt and compare canonical fields against original page images.
+- [x] Add original PDF alongside extracted fields/draft editing with page-aware evidence navigation and responsive access.
+- [x] Explain extraction → corrected draft → approved master → invoice reconciliation → AP decision in the UI and guide.
+- [x] Verify backend/frontend regressions, original-source integrity, live UI behavior and remaining uncertainties.
+
+### Plan and scope
+
+Preserve the earlier attempt and all warnings. Diagnose model response versus evidence verification, then repair generic orchestration/prompting rather than hardcoding this agreement. Source verification must distinguish automated evidence matching from original-PDF fact checks. Keep private source/model artifacts in ignored `data/`; do not approve accounting records during extraction tests. Add an accessible source-review component shared by extraction and editable draft contexts, with desktop side-by-side and narrow-screen alternatives. Plan mode and TodoWrite are unavailable, so this checked plan and commentary are the planning/check-in record. Use focused agents under AGENTS.md; root owns live reruns, integration, original-page review and final verification.
+
+Investigation changed the implementation plan: schema-valid output with an empty evidence array bypassed completion, while visual checks found separate semantic mistakes. Stronger descriptions alone failed on the real source. An opt-in focused pass now selects operative blocks using the external schema and re-extracts small field batches; the private rerun corrected premises and full payment/renewal conditions. Literal quotation copying remains unreliable, so evidence completion will select deterministic source spans that the host resolves back to exact original substrings. No fuzzy acceptance or automatic semantic/accounting approval is introduced. Deployment opts into focused review; reusable defaults and existing canonical field names remain compatible.
+
+Live verification exposed a separate intermittent Docker DNS failure before OCR: provider connection probes alternate between `ConnectError` and HTTP 200 while Windows resolves the same host. Preserve the failed attempt and add only bounded connection-establishment retries inside the provider's existing total inference deadline; do not retry HTTP/model responses, hardcode endpoint addresses, or change network security. Resume the full saved rerun after this narrow fix is tested.
+
+### Verification checkpoint
+
+Original-page review of the saved full OCR rerun caught a regression: automatically replacing narrative fields with selected citation fragments lost an installment amount, started mid-word, duplicated terms and omitted qualifications. Stop that approach. Evidence completion must preserve candidate values; exact spans remain separate citations, and narrative leaves explicitly require source review. Re-run field understanding against the unchanged, hash-verified 38-page OCR as a new persisted attempt using the existing injected document capability and worker, recording OCR reuse provenance. Compare conditions against the original pages again before accepting the result.
+
+The next saved field run repaired payment and renewal terms, with 23 literal citations and no missing-evidence gaps, but original-page verification rejected a null currency and a termination summary missing a cumulative condition. A focused response could omit requested keys and bypass retries because only the relaxed full schema was checked. Add test-first projected-schema validation requiring requested keys, and improve the external other-terms description to retain grounds, remedies and exceptions. Preserve this rejected attempt; do not fill values manually or describe literal citation coverage as semantic correctness.
+
+The bounded deployment review now handles one field per batch (32 maximum batches) and allows 16 source blocks. Original-page review shows other terms span at least ten page blocks across fit-out, deposit, restoration and termination, exceeding the previous eight-block cap even before paired renewal review. This is a host configuration change limited to the existing agreement schema allowlist; reusable defaults and other workflows remain unchanged.
+
+- Added test-first evidence completion using exact host-resolved span IDs, focused schema-guided review with requested-key validation/retries, and opt-in narrative source-review warnings. Evidence completion cannot rewrite canonical values. Deployment focuses review only on the rent agreement schema; existing public evidence/canonical contracts remain compatible. Connection retries are validated, deployment-owned and limited to establishing a connection within the existing inference deadline.
+- Added a model-free original-page renderer behind an injected ABC, tenant authorization before file access, bounded PNG output, and non-cacheable private responses. Source review is shared by extraction results and agreement/invoice editors, with exact evidence-to-page navigation, zoom, narrow-screen view controls and image retry preserving edits.
+- Final selected backend regression set: **492 passed**, with four pre-existing test warnings. Frontend: **40 passed**, and the production build passed. Scoped strict typing, Ruff, Black/isort and whitespace checks pass. Live desktop/narrow layout and editor preservation passed. Saved the final private side-by-side screenshot and reset the temporary viewport override; the normal 347px content viewport has no horizontal page overflow.
+
+### Original-source acceptance findings
+
+- Fresh queued OCR completed all 38 pages with 59,569 characters and no document warnings. Field-only follow-up jobs explicitly reused that unchanged, hash-verified document through the existing injected capability and normal worker/result persistence. Earlier artifacts remain immutable.
+- Final automatic attempt `676e7411-383a-4be4-918c-553491503193` has 29 literal citations and zero `missing_evidence` warnings, but **fails semantic acceptance**: the model selected the tenant as landlord, left rent type unresolved, and omitted deposit prerequisites. Its 46 raw diagnostics remain visible (42 after exact duplicate removal in the UI). Literal evidence coverage does not resolve those errors.
+- Stop treating additional model reruns as proof of correctness. Keep this attempt partial and prepare a separately labelled, agent-assisted source-review candidate with corrected source facts, unknown host identifiers and bank details, and independent review provenance. Do not overwrite automatic history, approve an agreement, reconcile the real invoice or create payment/posting side effects.
+- All seven history attempts retain source hashes; six completed and one failed attempt are preserved. Existing one synthetic agreement and four cases remain unchanged. API, web, PostgreSQL and Redis are healthy.
+
+### Final review
+
+- Saved a separate `agent_assisted_manual_source_correction` candidate and unapproved `AgreementDraft` under ignored `data/runtime/paper-real-sample/agreement-source-reviewed-*.json`. Source SHA256 and untouched automatic-result hashes match. Both schemas pass; all 39 reviewed quotes are raw-exact source-block substrings with populated canonical paths. Fourteen primary source/unknown-preservation checks pass. Thirteen reviewed other terms retain selected operative conditions and exceptions; this is not a complete legal abstract of all 38 pages.
+- Corrected landlord role, fixed pricing type, payment/deposit prerequisites and selected contractual conditions. Preserved annual pricing, conditional renewal and the IDR 3 source arithmetic discrepancy. Bank details and external vendor/store identifiers remain unknown. Kept all 46 historical automated diagnostics clearly labelled as pre-correction findings, plus eight explicit source-review limitations.
+- Loaded corrected values into the unsaved editable agreement form and verified payment, renewal, all other terms, extensions, landlord and unknown identities/bank. The UI retains original automated evidence; replacement reviewed evidence is in the separate draft artifact, explicitly recorded in the version reason. No agreement was saved or approved. Narrow Original/Fields switching preserves corrected terms; the review tab remains open.
+- Extraction pipeline regressions and UI checks pass, but unassisted model semantic acceptance remains failed and visible. Real invoice reconciliation still needs external identities, documentary support and a versioned installment/withholding rule. No real approval, posting, email or payment was performed; no commit/push was requested.
+
+## PAPER PDF extraction and persistent upload history — 2026-10-15
+
+- [x] Trace current workers, durable jobs/results, extraction configuration and draft editor boundaries.
+- [x] Write failing tests for queued PAPER extraction, tenant-scoped history/results and evidence-preserving draft mapping.
+- [x] Add an additive worker-dispatched extraction workflow with persisted original files, document output, field results, warnings and safe failures.
+- [x] Configure deployment-owned OCR/field profiles and clarify the model-neutral response protocol with regression coverage.
+- [x] Add PDF upload, progress/history, source/results access and deliberate import into editable agreement/invoice drafts.
+- [x] Run focused backend/frontend checks, start updated services and verify actual UI extraction/history/reload behavior.
+- [x] Document verified behavior, remaining limitations and test instructions.
+
+### Plan and scope
+
+Reuse existing ingestion jobs and worker backends through an additive workflow dispatch hook. Keep extraction services independent of PAPER approval/reconciliation. Persist extraction artifacts before draft import; preserve literal source evidence and original warnings through user edits. Unknown identities/dates stay editable and unapproved. History must be tenant scoped, survive browser reload and show failed/pending uploads as well as completed output. Existing document processing, manual PAPER forms and JSON import remain compatible. Deployment selects OCR and field providers; no provider credentials or model-specific behavior enters the UI/PAPER domain. Use focused subagents as required by AGENTS.md, TDD for new pipeline behavior, and integration/UI verification. Plan mode and TodoWrite are unavailable, so this checked plan and commentary are the planning record.
+
+### Review
+
+- Added queued `/v1/paper/extractions` upload/list/detail/original/retry endpoints using the existing tenant-scoped ingestion/document tables, with no migration. Original PDFs and immutable detailed JSON artifacts live in configured private upload storage; list responses carry light metadata. Partial field failures preserve recovered document text and warnings. Retry creates a new source copy/history attempt. Both queue backends dispatch the optional workflow while retaining the existing processing callback for other jobs.
+- Added deployment-owned OCR/field profiles, environment substitution, explicit evidence-array response instructions, and generic external schema field descriptions. PAPER/UI choose no model. Docker now selects Redis and a validated 1800-second full-document deadline; each inference call retains its 60-second budget. Library defaults remain unchanged. The original 300-second deadline failed on the long sample; after upgrading the old worker, the single interrupted sample was explicitly handed back to the queue using the tested recovery helper.
+- Added PDF upload, text/multimodal choice, polling, paginated extraction history, original/text/JSON access, evidence/warning review, and an explicit Prepare → Load/Replace handoff to editable agreement/invoice drafts. Missing host IDs/dates remain unknown. Sidebar Upload history and Documents now load server records across browser sessions, use original filenames, and clear scope on account/tenant/backend changes. Accepted uploads refresh shared history. Unsaved form edits remain local; explicit agreement/case save persists edits.
+- TDD reproduced the new worker/draft boundaries and review findings before fixes. Fixed precommit/cancelled file cleanup, independent retry sources, after-commit deletion cleanup, Redis postcommit housekeeping, graceful interruption handoff, selected-backend binding, global history refresh, original filenames, and generic history credential serialization. Generic retries now use the queue-neutral requeue operation. Redis startup no longer marks durable pending/active work failed.
+- Verification: **420 focused backend tests passed**, including existing extraction/PAPER/API/worker/storage behavior and real SQLite queued-history reopening; **36 frontend tests passed** and the production build passed. Scoped strict mypy passed **11 new source files** using the cached Python 3.11 tool; changed boundaries passed Ruff/Black/isort and whitespace checks. Existing mock coroutine warnings and Vite bundle/Browserslist advisories remain. No full-suite/GPU/production availability claim.
+- Live Docker checks: the supplied invoice completed in multimodal mode with one page, 1,120 text characters, two visual assets and 10 evidence quotes. The 38-page agreement completed OCR with 58,680 characters; canonical output is **partial**, with 15 missing-evidence warnings and no verified field quotes. Browser verification loaded both into editable drafts with retained diagnostics, tested unsaved replacement controls, submitted an additional invoice via the PDF picker, and confirmed its completion plus shared Documents/history. Saved invoice output survived the API recreation; history survived browser navigation/reload. Browser file-picker automation stalled for an extended period despite its requested timeout, but ultimately completed; no further picker retries were needed.
+- Sources/results remain under ignored private `data/`; no accounting approval, payment, email or SAP operation was created. Verified all three saved original PDFs and result document IDs against source SHA256 values; the existing one synthetic approved master and four cases remain available. All four Docker services are healthy. Redis workers are coroutines inside the API process (default four), not separate worker containers. Graceful shutdown requeues PAPER work; abrupt consumed-job loss still needs recovery because existing Redis lists have no acknowledgement leases. Ambiguous completion commits conservatively retain artifacts, with legacy failure/retry behavior at that boundary unchanged. Extraction correctness still needs human source review, particularly scanned bank details, advance installments and withholding rules.
+- Updated README and PAPER/extraction test/configuration guides. Existing unrelated changes were preserved. No commit/push or production deployment was requested.
+- Final browser layout review found the existing fixed sidebar consumed almost the whole 347px in-app viewport. Added a compact accessible icon rail, reduced small-screen padding, a usable account menu, and wrapping workflow tabs. Reverified the 36 frontend tests/build. Browser measurements show no horizontal page overflow at 347px (64px rail) or desktop 1272px (256px sidebar); temporary viewport override was reset. Saved private narrow/desktop proof screenshots in `data/runtime/paper-real-sample/` and left the agreement result deep link open for review.
+
+## Real agreement and invoice extraction check — 2026-10-15
+
+- [x] Inspect the supplied PDFs and identify native-text/OCR requirements.
+- [x] Verify the running extraction configuration and exercise its real behavior.
+- [x] Read the scans with local OCR and visual checks; map source facts to canonical schemas with page evidence and explicit unknowns.
+- [x] Validate the candidate agreement/invoice data and compare identity, periods, amounts, and classification inputs.
+- [x] Provide local review artifacts and record proven behavior, gaps, and next steps.
+
+### Plan and scope
+
+Test the two user-supplied files without changing workflow code or publishing an accounting decision. Keep private source content and review artifacts in ignored local storage. Distinguish application extraction from any local OCR/manual verification used to assess the documents. Preserve source references and unknown business IDs. Plan mode and TodoWrite are unavailable; this checked plan and commentary are the planning record.
+
+### Review
+
+- Both supplied files are scans: 38 agreement pages and one invoice page, with no native PDF text. Live API native-only calls return partial/empty text, while multimodal mode retains invoice images. OCR requests currently return `503 unknown_model_profile`: the running deployment has no extraction profiles configured.
+- An isolated instance of the existing provider-neutral extraction service, using the configured cloud vision adapter and existing credentials, successfully OCR processed all 39 pages. Agreement output contains 58,645 text characters; invoice output contains 1,120. No provider/model logic was added to PAPER, and no live extraction configuration was changed.
+- Default model field responses failed strict evidence validation because they returned an object instead of the evidence array. Clarifying the response protocol in the private test enabled structural extraction. Generic external schema descriptions then corrected invoice field selection; its 11 returned evidence quotes verify. The agreement model still returned 44 evidence warnings and made semantic mistakes involving the property address, payment timing and annual pricing. Its untouched results and warnings are retained separately from the manually corrected review candidate.
+- Private source-checked agreement terms, an unapproved `AgreementDraft`, invoice terms, provenance, and validation results are saved under ignored `data/runtime/paper-real-sample/`. All three Pydantic contracts validate. Verified 38 agreement quote/source/pointer references and 11 invoice references, both source SHA256 IDs, installment totals, invoice gross-to-installment equality and net-payable arithmetic. Preserved unknown host IDs and service dates, the annual-versus-total source discrepancy, and withholding rounding. High-resolution account review indicates a match but still requires human confirmation of degraded scan detail before payment.
+- No agreement/case record, classification, approval, payment, email or SAP side effect was created. Vendor/store authority, accounting commencement, renewal assessment, service-period linkage and documentary requirements remain review inputs. These advance installments and PPh withholding require explicit host-owned rules; recording them in schema extensions does not make the existing pricing engine implement them. The current PAPER screen supports structured review/import, with PDF upload-to-draft prefill still pending.
+- Recommended next work: configure the deployed extraction profile; add a regression-tested evidence-array response contract; connect PDF upload/extraction to editable draft prefill; add typed installment/prepayment and withholding-versus-VAT reconciliation rules. No production source changes or full regression claims in this sample assessment. Existing unrelated changes were preserved.
+
+## One-command Docker development stack — 2026-10-15
+
+- [x] Inventory and back up the existing PostgreSQL volume; record data/settings baselines.
+- [x] Add API and Vite web services with container-aware connections, automatic migrations, and existing uploads/configuration mounts.
+- [x] Remove the unnecessary Redis host port binding without touching the other project's Redis.
+- [x] Preserve production overlay behavior and document local/manual startup and data handling.
+- [x] Verify configuration, image builds, live API/web/proxy behavior, and retained database rows/files/settings.
+
+### Review
+
+Completed and running with all four containers healthy. The verified manual API/Vite processes were replaced by containers on the same localhost ports; the other project's Redis remains running on host port 6379. This stack's Redis has no host port binding.
+
+- Preserved `unisensoryai_postgres_data` and `unisensoryai_redis_data`, mounted existing `data/`, `configs/`, source/migrations, and frontend env files. Migrations run before the single-process API starts; the configured queue backend is retained. OAuth callbacks retain a public browser URL.
+- Saved the pre-change database dump and comparison baselines in ignored `data/backups/`. All 14 table content hashes match exactly after startup, including the agreement, four invoice cases, history/decisions and accountant role. All seven upload checksums and both actual env files match the originals.
+- Manual/Docker JSON responses match exactly for health, OpenAPI, auth identity, review context, agreement listing and invoice-case listing. Web `/`, `/paper`, `/health` and PAPER proxy routes return 200. Browser reload shows the retained approved agreement and AP-enabled reviewer.
+- Both images built successfully; live API-to-Redis ping, upload-directory write access (temporary probe removed), and credential-free HTTPS reachability to the configured cloud host passed.
+- Focused backend regression suite: **60 passed** (`test_upload_storage`, `test_api`, `test_ingestion_queue`, `test_redis_queue`). Frontend: **24 passed**, production build passed. New helper/tests pass Ruff and Black; helper passes strict mypy. Existing legacy lint findings were left unchanged. Whitespace check passed.
+- Parsed development, production and optional GPU overlays: production excludes Vite, resets development host ports/bind mounts and selects the runtime image; GPU configuration enables local-model dependencies/device/cache. The default cloud stack was exercised; GPU inference and production deployment were not run.
+
+Existing unrelated source changes remain in place. Use `docker compose up --build` for foreground startup, `docker compose stop` to stop, and never add `-v` to `down` when retaining database volumes.
+
+## PAPER web review interface — 2026-10-14
+
+- [x] Add tested, tenant-scoped agreement listing and current review capabilities APIs.
+- [x] Add a modular PAPER client, schema-driven field forms, JSON import/export, and synthetic sample builders.
+- [x] Build agreement creation, version review, approval, and effective-date lookup screens.
+- [x] Build invoice package creation, findings, corrections, version history, and AP decision screens.
+- [x] Integrate PAPER navigation, run backend/frontend checks, and exercise the flow in the browser.
+- [x] Start the frontend, document the test steps and actual verification, and preserve existing workflows.
+
+### Plan and scope
+
+The user selected **web interface for existing workflows first**. Build additive React screens over the implemented PAPER services; email and SAP remain later work. Keep ordinary fields editable through schema-driven forms and expose advanced JSON for external extensions and retained evidence. New draft and invoice samples use unique synthetic business identifiers and save only on explicit user submission. Reviewer permissions, requirements, and allowed AP exceptions come from the backend; existing role, tenant, stale-version, and policy guards remain authoritative. Keep model construction out of the UI and PAPER domain. The current extraction screen remains available; this phase supplies typed field entry/import rather than inventing document inference. Verify the actual browser flow and a production frontend build. Plan mode and TodoWrite are unavailable in this session, so this checked plan and the commentary check-in serve as the planning record.
+
+### Review
+
+- Added tenant-scoped `GET /v1/paper/agreements` listing latest snapshots with deterministic pagination, and a separately composed `GET /v1/paper/review-context` router returning persisted-role permissions and host-owned requirements/exceptions. No migration or approval authority change. The listing port is optional for existing external repository adapters, preserving their lifecycle compatibility.
+- Added `/paper` and sidebar navigation with separate agreement/invoice workspaces, a shared API client, server-schema forms, guarded JSON import, and isolated unique synthetic sample builders. Supports drafts/publication, date lookup, append-only corrections, AP decisions, findings, provenance, duplicate dispositions, and paginated version history. Decimal amounts and account IDs remain strings. New schemas and fields use the same catalog; the UI constructs no model or provider.
+- TDD demonstrated failures for the 11 new backend checks, frontend helper/API imports, AP decision eligibility, package replacement/identity handoff, and exact source-ID parsing before implementing their behaviors. Corrected review findings around discarded editors on access refresh, stale document collections during import, source-ID comma splitting/synchronization, and unapplied JSON edits. Backend authority, tenant scope, reference checks, and structural blockers remain intact.
+- Verification: **223 PAPER/API tests passed** (193 PAPER plus 30 API), **24 frontend tests passed**, scoped React hook/unused checks passed, and the production Vite build passed. Backend changed sources passed Ruff, Black, isort, and strict mypy. Existing AsyncMock warnings and Vite bundle-size/Browserslist notices remain; no full-suite or live extraction-accuracy claim. `git diff --check` passed.
+- Browser verification against PostgreSQL exercised draft creation/approval, preserved extensions, unapplied JSON save blocking, complete invoice matching/AP approval, missing-tax correction into version 2, historical decision controls, explicit bank exception acceptance, duplicate import/blocking, retained unsaved edits on access refresh, and reload persistence. Publishing agreement version 2 caused a stale AP approval to fail; reassessing generated case version 3, then AP approval succeeded against the new reference. Existing Dashboard and Chat screens loaded through navigation; no inference or communication was submitted.
+- The backend is running on `127.0.0.1:8010` (server PID **48780**, uv launcher **45600**), frontend on `127.0.0.1:5173` (PID **26520**), and the existing PostgreSQL service remains healthy. Metadata/logs are in ignored `data/runtime/paper-backend.*` and `paper-frontend.*`. The PAPER browser tab remains open. Browser testing retained one uniquely named synthetic agreement (two approved versions) and four cases, including a duplicate; these are labelled synthetic examples.
+- Updated the web/Swagger testing guide, README, and current assessment follow-up. Saved proof screenshot `documentation/screenshots/paper-review.jpg`. PDF upload/automatic extraction-to-package mapping, email/SAP, automatic accounting classification, and event/rematch automation remain future integrations under the user's selected scope. No commit, push, deployment, mailbox/SAP side effect, or new role grant was performed.
+
+## Run PAPER migrations and backend for Swagger testing — 2026-10-14
+
+- [x] Verify the configured database target, installed runtime, migration state, and port 8010.
+- [x] Apply the authorized migrations to the configured database and verify the revision/tables.
+- [x] Repair the stale virtual environment's missing declared dependency before restarting the backend.
+- [x] Reproduce and fix the existing HTML preview route's invalid response class that blocks Swagger schema generation.
+- [x] Start or reuse the backend and verify health, Swagger, and PAPER routes.
+- [x] Record the running process, testing URL, and any approval-role prerequisite.
+- [x] Create the explicitly authorized local test reviewer and verify approval/reconciliation against PostgreSQL without retaining synthetic business records.
+
+### Plan and scope
+
+The user explicitly authorized applying migrations and starting the backend for local Swagger testing. Use the same configured database for migration and server startup, keep credentials out of output, preserve existing data/workflows, and run the backend as a hidden background process. Check approval readiness without creating agreements, invoices, or granting user roles unless further authorization establishes the intended reviewer.
+
+Startup finding: local PostgreSQL is not listening, the project has no running database container, and `postgres:17-alpine` is absent. Start the configured Docker Compose `db` service; obtain its configured image if needed. Compose created the project's network and volume while reporting the missing image. After database readiness, inspect migration state and upgrade normally; do not assume prior tables exist.
+
+Re-plan after startup verification: PostgreSQL is healthy and all five migrations applied successfully to the new local database; revision `dc728f04a912` and seven PAPER tables are verified. The API exited during import because `.venv` lacks the declared `jsonschema` dependency. Inspect all runtime requirements and install the missing locked dependency closure without broadly replacing the existing model environment. The development tenant exists, but no `dev-user` record exists; approval-role setup requires an explicit reviewer choice.
+
+Second startup finding: the repaired environment imports the backend, but the existing HTML preview endpoint declares `response_class=None`, causing full OpenAPI generation to fail. Add a failing full-application Swagger regression, replace that declaration with `HTMLResponse`, and verify the existing preview response plus PAPER route schemas before relaunching.
+
+### Review
+
+- Started Docker Compose's configured PostgreSQL 17 service. Its image was absent and was downloaded; the new project volume initialized a local database at `127.0.0.1:5434/unisensory`. All five migrations applied successfully through `dc728f04a912`, and all seven PAPER tables were verified. No existing data volume was deleted or replaced.
+- Installed the missing `jsonschema` package and its locked dependency versions into `.venv` using uv's offline cache. Other model/runtime packages were retained. Added a failing full-application OpenAPI test, then replaced the legacy HTML preview route's `None` response class with `HTMLResponse`; the handler's existing HTML behavior is preserved.
+- The backend runs as a hidden background process bound to `127.0.0.1:8010`; server PID **28272**, uv launcher PID **37736**. Process metadata and logs are in `data/runtime/paper-backend.json` and `paper-backend.stdout.log` / `paper-backend.stderr.log`. Health, Swagger HTML, OpenAPI, the PAPER schema catalog, and invoice-case listing all returned **200**; both approval endpoints are registered.
+- The user selected Swagger examples and explicitly approved creating a local development reviewer. Persisted `dev-user` in tenant `default` with role `accountant`; authentication remains disabled under the existing local configuration. The actual agreement and AP actor guards recognize that persisted role. No OAuth login is needed for this local Swagger session.
+- A rollback-only test using the actual PostgreSQL adapters and services passed agreement draft/publication, invoice matching, and AP approval. Temporary synthetic business records and duplicate claims were rolled back, and absence of their agreement/case headers was verified. Only the authorized development reviewer was retained.
+- Verification after the fix: **30 API tests passed** (including the new Swagger regression) and **182 PAPER tests passed**. Existing AsyncMock warnings remain in API tests. `git diff --check` passed. Updated the UI guide and assessment with the actual local startup and PostgreSQL verification.
+- No model inference, browser interaction, mailbox/SAP side effects, concurrent PostgreSQL stress test, commit, or push was performed. The backend and database remain running for the user's Swagger testing.
+
+## PAPER manual reconciliation and UI testing — 2026-10-14
+
+- [x] Define validated package, reconciliation, case version, and AP decision contracts; demonstrate failing tests before implementation.
+- [x] Implement model-independent, configurable completeness and deterministic matching against approved agreement versions covering the invoice period.
+- [x] Add durable tenant-scoped case versions, atomic duplicate claims, and audited AP decisions with stale-version/reference guards.
+- [x] Expose additive authenticated case APIs and configuration without changing existing workflows.
+- [x] Provide ready-to-paste Swagger UI scenarios for agreement creation/approval, matched and incomplete cases, mismatches, duplicates, overrides, and stale approval.
+- [x] Verify focused tests, migration structure, existing regressions, lint/types/formatting, and document actual results.
+
+### Plan and scope
+
+Proceed with the next manually supplied package phase: typed extraction results and source references enter a durable case; deterministic rules identify completeness, identity, dates, bank, amount, and tax inconsistencies against approved agreement versions. Decimal arithmetic does not infer tax law or arbitrary payment schedules. Fixed-rent comparison requires an explicit supported billing basis; unsupported pricing requires review. AP decisions apply to an exact case and reference/policy version, with explicit, configured exception overrides; incomplete packages, duplicates, missing authoritative agreements, and stale decisions cannot be approved. New case versions invalidate the prior version's AP decision. Libraries use injected ports/services and contain no model construction. Additive SQL storage and APIs preserve prior workflows. Source artifacts remain host-owned; email/SAP/payment and background event orchestration remain later work. Proceeded with the recommended Swagger testing assumption after no answer to the optional web-screen preference question.
+
+### Review
+
+- Implemented validated source packages, deterministic rules, versioned assessments, case repository/rule interfaces, and `InvoiceCaseService` under `src/paper/reconciliation`. Settings and versioned injected rules enter the policy fingerprint; imported business modules construct no model or server/database dependencies. Decimal comparisons retain exact source precision and require explicit supported pricing semantics.
+- Added tenant-scoped case, immutable version, immutable AP decision, and durable duplicate-claim tables through `dc728f04a912`. Storage uses tenant-qualified joins/composite foreign keys, latest-version guards, caller-owned transactions, case/reference locks, and atomic duplicate claims. Exact vendor/invoice claims survive correction and rejection. Only the original case can reuse its own claim.
+- Added six authenticated case APIs with bounded validated inputs, persisted reviewer roles, shared PAPER rate limiting, storage deadlines, commit-before-success behavior, and safe error messages. AP approval verifies current reference/policy/content and requires explicit acceptance of every permitted unresolved code. Missing information, identity/period/currency blockers, duplicates, and stale case/reference/policy versions cannot be overridden. Rejection and historical decisions remain auditable.
+- TDD covered contracts, rules, lifecycle, storage, and API integration. Review regressions first reproduced incompatible custom-rule fingerprints and an insufficient finding limit, then passed after the fixes. Rules are bounded to 64 extensions and 100 findings each; valid 100-document packages retain all built-in findings.
+- Verification: **182 PAPER tests passed**, including actual synthetic HTTP flows through authorization, approved master, reconciliation, and SQLite storage. All three example JSON files were exercised through those endpoints. **204 existing extraction/API/auth/services/chat/policy tests passed**, with four pre-existing AsyncMock warnings. Strict mypy passed for 62 implementation files; Ruff, Black, and isort passed for 78 implementation/migration/test files. Python 3.10 syntax passed for all 62 implementation files.
+- Alembic has one head, `dc728f04a912`; offline PostgreSQL upgrade/downgrade adds/removes only the four case tables. An offline wheel build matched current sources and three packaged YAML defaults; isolated imports/configuration and all five schemas loaded without API, database, or ML startup. Guide decision bodies and local example links validated. Swagger generated bearer authorization and typed package, revision, and decision forms. `git diff --check` passed.
+- Saved `documentation/PAPER_UI_TESTING.md` and `examples/paper` with complete Swagger examples, authentication/role prerequisites, expected outcomes, correction/override/duplicate/stale-reference scenarios, and mapping from real PDF extraction. Updated the architecture and assessment guides to distinguish implemented manual reconciliation from future background/email/SAP orchestration. The existing main web app still has no PAPER page.
+- Limits: no live database migration, concurrent PostgreSQL stress test, browser interaction, live model accuracy, accounting-rule validation, or full-suite run was performed. Mailbox/reply correlation, vendor communications, automatic rematch, SAP/payment, and dedicated web screens remain separate work. No commit, push, or deployment was performed.
+
+## PAPER schemas and approved agreement master — 2026-10-14
+
+- [x] Define external PAPER schemas and the agreement identity, version, approval, and repository contracts.
+- [x] Write and demonstrate failing schema, master lifecycle, persistence, and API tests before implementation.
+- [x] Implement model-independent schemas and a tenant-scoped, append-only agreement master with approved effective-date lookup.
+- [x] Add SQLAlchemy persistence and an additive Alembic migration; expose authenticated, role-checked PAPER APIs without changing existing workflows.
+- [x] Verify new contracts, approval/version concurrency guards, tenant isolation, migration structure, and existing workflow regressions.
+- [x] Document extraction-to-master embedding, approval semantics, deployment migration, and actual verification results.
+
+### Plan and scope
+
+Phase one supplies five external extraction schemas (agreement, rent invoice, tax invoice, utility statement, supporting document) and a reusable agreement master. Draft versions retain source IDs and field evidence; immutable content and a separate approval record preserve audit history. Only approved versions effective on the requested date are returned for matching. Approval explicitly records a reviewer classification and rule reference; this phase does not invent accounting rules or implement invoice matching, email/SAP connectors, or the dashboard. APIs use the existing authenticated tenant identity, resolve approval roles from persisted users, and commit only successful mutations. Repository interfaces remain independent of FastAPI, SQLAlchemy, and inference providers. New unit tests mock database sessions; isolated database integration tests exercise actual constraints separately.
+
+### Review
+
+- Implemented five version-1 external schemas in `src/paper/schemas`, tenant-scoped lifecycle contracts and service in `src/paper`, an injected SQLAlchemy adapter, three additive database tables, and eight authenticated `/v1/paper` routes. Existing extraction, document pipelines, chat, and policy implementations are unchanged; the server only adds the router.
+- Approval retains reviewer classification/rule references and audit identity/time. Missing required or rent-specific terms block publication; retained extraction warnings require explicit acknowledgement. New drafts retain previous approved authority. Effective-date lookup selects the latest started approval, then checks expiry, so an ended amendment cannot resurrect older terms.
+- Persistence uses shared header updates for revision/approval locking, expected-version guards, tenant-qualified joins/composite foreign keys, unique identity/approval constraints, and separate immutable snapshots/approval records. Caller transactions own commits. Trusted hosts own original artifact retention and role assignment.
+- TDD: missing-contract tests failed before implementation; review-driven tests reproduced missing payment requirements, unacknowledged extraction warnings, empty required extensions, and expired amendment fallback before their fixes. Unit tests mock sessions; integration tests use an isolated SQLite database with explicit transaction control.
+- Verification: **90 new PAPER tests passed**. A separate existing extraction/API/auth/service/chat/policy regression subset passed **204 tests**, with four existing AsyncMock warnings. Strict mypy passed for 33 implementation files; Ruff, Black, and isort passed for 41 new implementation/migration/test files. Python 3.10 syntax passed for 33 implementation files; the guide's Python/JSON examples and six source links validated.
+- Alembic has one head, `8b3e1c725f60`; offline PostgreSQL upgrade/downgrade generated only the three PAPER tables. An offline wheel build and isolated extracted-wheel smoke test verified current sources, packaged policy YAML, all five schemas, and library imports without API/database/ML startup. `git diff --check` passed.
+- Focused read-only reviews verified schema/service/storage separation and final approval/supersession logic. A configurable empty-dictionary completeness edge was found and fixed with a failing regression.
+- Limits: no live PostgreSQL migration or concurrent PostgreSQL stress test, live model accuracy, full-suite, frontend, mailbox, SAP, or accounting-rule validation was performed. Classification and rule definitions remain explicit host/reviewer responsibilities. No commit, push, or deployment was requested for this phase.
+- Saved `documentation/PAPER_AGREEMENT_MASTER.md` with external embedding, API examples, authority/version semantics, configuration, deployment requirements, and remaining phase boundaries. Updated the architecture and assessment guides to distinguish this implementation from the proposed general workflow runner.
+
+## Target solution requirements assessment — 2026-10-13
+
+- [x] Read all four requirement PDF pages and inspect rendered diagrams.
+- [x] Map every target workflow requirement to implemented orchestration and extraction contracts.
+- [x] Cross-check architecture gaps and integration boundaries with focused read-only reviews.
+- [x] Deliver the support matrix, recommended extension boundaries, and next implementation priorities.
+
+### Scope
+
+Analysis of the attached target architecture against current source. No application implementation, deployment, or inference quality claims; preserve existing workflows and separate reusable primitives from complete business workflows.
+
+### Review
+
+- Saved `documentation/PAPER_WORKFLOW_ASSESSMENT.md` with requirement matrices for PAPER.73, PAPER.ID, and SAP/payment; a proposed additive architecture; a synthetic case example; implementation priorities; and verified source references.
+- Two read-only reviews confirmed that current strategies provide in-process sequence/router/fan-out, while domain repositories, approval/vendor waits, continuous rematching, and email/SAP/payment connectors are absent. Reusable PDF and external-schema extraction supplies the perception boundary.
+- Material reuse constraints: Redis destructive dequeue does not recover in-flight work; extraction success is not business approval; the policy reference query lacks tenant and approved/effective-version constraints. General workflow runner/registry remains proposed future work.
+- Verification: all four PDF pages were text-read and visually inspected; checked report source links and whitespace. Application code is unchanged. No runtime, live model, mailbox, database, SAP, or accounting-accuracy validation was performed for this assessment.
 
 ## Publish extraction changes to origin/main — 2026-10-13
 

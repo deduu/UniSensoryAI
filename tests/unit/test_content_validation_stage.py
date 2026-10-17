@@ -8,7 +8,6 @@ import pytest
 from PIL import Image
 
 _MOCK_MODULES = [
-    "fitz",
     "torch", "torch.cuda", "torch.nn", "torch.nn.functional",
     "torchvision", "torchvision.transforms",
     "transformers", "accelerate", "bitsandbytes",

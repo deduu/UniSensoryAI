@@ -4,6 +4,8 @@ UniSensoryAI should expose document extraction as a reusable async service. A wo
 
 This is the broader proposed architecture. The reusable PDF and external-schema boundary is now implemented in `src/extraction/`; see [the implemented API and embedding guide](EXTRACTION_API.md). It is exposed through additive endpoints and does not replace existing job pipelines. The general workflow runner/registry below and migration of chat/policy remain future work.
 
+PAPER now adds external document schemas, an approved versioned agreement master, and durable manual invoice reconciliation above that extraction boundary. See [PAPER schemas and agreement master](PAPER_AGREEMENT_MASTER.md) and [PAPER UI testing](PAPER_UI_TESTING.md) for implemented contracts, embedding, persistence, and review APIs. These modules do not implement the general runner, mailbox/SAP connectors, or background business events described below.
+
 ## Dependency boundaries
 
 ```mermaid
@@ -314,3 +316,13 @@ Acceptance checks establish the boundary:
 - An external host imports and invokes extraction through the public facade with injected dependencies.
 
 The first deliverable is a small reusable extraction boundary with explicit contracts and adapters. Its quality should be judged by these extension and compatibility checks before expanding the orchestration framework.
+
+## Optional installment and withholding rules
+
+PAPER now exposes optional `InstallmentSchedule`, `RentInstallment` and `WithholdingPolicy` contracts through `src.paper.schemas`. The agreement owns approved, versioned terms. The invoice names an installment and separates VAT, withholding and rounding adjustment. `ReconciliationReviewContext` records a reviewed allocation without rewriting unknown source service periods.
+
+`build_reconciliation_engine(settings, extra_rules=())` composes explicitly enabled `BaseReconciliationRule` implementations. The installment and withholding rules are deterministic, make no model or network calls, and publish their IDs and versions in the assessment policy fingerprint. Library defaults leave both disabled; `configs/paper_reconciliation.yaml` enables them for this deployment. Existing monthly and per-invoice packages retain their prior path when optional terms are absent.
+
+An embedding host can supply these validated contracts directly, choose another extraction provider, or inject additional pure rules without changing workers, API routes or the model adapter. Certificate requirements and permitted review exceptions belong to host settings. New structural tax/net discrepancies fail closed and are not made approvable by the generic amount exception.
+
+Stateful authority remains in `InvoiceCaseService` and its repository adapters. Approval rechecks the exact agreement and rule versions. The SQL adapter atomically reserves an installment using tenant, agreement identity and stable installment ID, independently of invoice number and agreement version; a second invoice cannot claim the same obligation. Adapters for other stores must preserve transactional claim ownership and decision locking. Saved installment IDs cannot be renamed or removed to reopen an obligation. Claims remain reserved after rejection until an explicit cancellation/release workflow exists.

@@ -13,6 +13,7 @@ import { useApp } from '../context/AppContext'
 import { useJobs } from '../context/JobContext'
 import { deleteJob } from '../api/jobs'
 import { AVAILABLE_MODELS } from '../api/models'
+import { Link } from 'react-router-dom'
 
 function UploadTab() {
   const { files, state, error, lastJobId, addFiles, removeFile, upload, reset, STATES } =
@@ -87,7 +88,7 @@ function UploadTab() {
 function JobsTab() {
   const { backendUrl } = useApp()
   const { removeJob } = useJobs()
-  const { jobs } = useJobList()
+  const { jobs, refreshAll, historyLoading } = useJobList()
   const [selectedJob, setSelectedJob] = useState(null)
   const [deleteError, setDeleteError] = useState(null)
 
@@ -106,6 +107,7 @@ function JobsTab() {
 
   return (
     <div className="relative">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 text-sm"><p className="text-ink-muted">Saved server history across sessions. Active uploads refresh automatically.</p><button type="button" disabled={historyLoading} onClick={refreshAll} className="rounded-lg border border-surface-border px-3 py-2 text-ink-muted hover:bg-surface-muted">{historyLoading ? 'Refreshing…' : 'Refresh saved uploads'}</button></div>
       {deleteError && (
         <p className="mb-3 rounded bg-red-50 px-3 py-2 text-sm text-red-700">{deleteError}</p>
       )}
@@ -115,7 +117,7 @@ function JobsTab() {
         onDeleteJob={handleDeleteJob}
       />
       {selectedJob && (
-        <JobDetailPanel job={selectedJob} onClose={() => setSelectedJob(null)} />
+        <JobDetailPanel job={jobs.find(job => job.job_id === selectedJob.job_id) || selectedJob} onClose={() => setSelectedJob(null)} />
       )}
     </div>
   )
@@ -123,18 +125,19 @@ function JobsTab() {
 
 export default function Parse() {
   useEffect(() => {
-    document.title = 'Parse â€” Intelidoc'
+    document.title = 'Upload history — Intelidoc'
   }, [])
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-ink">Parse Documents</h1>
+      <h1 className="text-2xl font-bold text-ink">Upload history</h1>
       <p className="mt-1 text-sm text-ink-muted">
-        Upload documents for AI-powered extraction and analysis
+        Browse saved uploads, inspect extracted documents, and retry failed processing. <Link to="/paper" className="text-brand underline">PAPER extraction history and draft preparation</Link>
       </p>
 
       <Tabs
         className="mt-6"
+        defaultTab="jobs"
         tabs={[
           { key: 'upload', label: 'Upload', content: <UploadTab /> },
           { key: 'jobs', label: 'Jobs', content: <JobsTab /> },

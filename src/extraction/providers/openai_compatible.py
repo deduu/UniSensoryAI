@@ -18,6 +18,7 @@ class _Settings(BaseModel):
     base_url: AnyHttpUrl
     api_key: SecretStr | None = None
     timeout_seconds: float = Field(default=60, gt=0, le=60)
+    connect_retries: int = Field(default=0, ge=0, le=3)
 
     @field_validator("base_url")
     @classmethod
@@ -38,6 +39,7 @@ class OpenAICompatibleGenerationProvider(BaseGenerationProvider):
         api_key: str | None = None,
         client: httpx.AsyncClient | None = None,
         timeout_seconds: float = 60,
+        connect_retries: int = 0,
     ) -> None:
         """Configure an adapter without making any network request.
 
@@ -47,13 +49,27 @@ class OpenAICompatibleGenerationProvider(BaseGenerationProvider):
             api_key: Optional secret, held only in private validated settings.
             client: Optional host-owned async client.
             timeout_seconds: Maximum elapsed duration of one inference call.
+            connect_retries: Bounded connection-establishment retries for an owned client.
+                An injected client's transport and retry policy remain host-owned.
         """
         self._descriptor = ModelDescriptor.model_validate(descriptor)
         self._settings = _Settings.model_validate(
-            {"base_url": base_url, "api_key": api_key, "timeout_seconds": timeout_seconds}
+            {
+                "base_url": base_url,
+                "api_key": api_key,
+                "timeout_seconds": timeout_seconds,
+                "connect_retries": connect_retries,
+            }
         )
         self._owns_client = client is None
-        self._client = client or httpx.AsyncClient(timeout=timeout_seconds)
+        self._client = client or httpx.AsyncClient(
+            timeout=self._settings.timeout_seconds,
+            transport=(
+                httpx.AsyncHTTPTransport(retries=self._settings.connect_retries)
+                if self._settings.connect_retries
+                else None
+            ),
+        )
         self._closed = False
 
     @property

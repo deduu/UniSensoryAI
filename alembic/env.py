@@ -20,6 +20,15 @@ from src.db.models import chat
 from src.db.models import tenant
 from src.db.models import user
 from src.db.models import document  # noqa: F401
+from src.db.models import (  # noqa: F401
+    agreement,
+    agreement_approval,
+    agreement_version,
+    invoice_case,
+    invoice_case_decision,
+    invoice_case_version,
+    invoice_duplicate_claim,
+)
 
 # get config
 config = context.config

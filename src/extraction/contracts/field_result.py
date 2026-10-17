@@ -1,8 +1,8 @@
 """Validated external business data and evidence."""
 
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import JsonValue, computed_field
+from pydantic import Field, JsonValue, computed_field
 
 from .base import _Contract
 from .evidence import FieldEvidence
@@ -15,6 +15,7 @@ class FieldExtractionResult(_Contract):
     schema_id: str
     schema_version: str
     data: dict[str, JsonValue]
+    model_ids: tuple[Annotated[str, Field(min_length=1)], ...] = ()
     evidence: tuple[FieldEvidence, ...] = ()
     warnings: tuple[ExtractionIssue, ...] = ()
 

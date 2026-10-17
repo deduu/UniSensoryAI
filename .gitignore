@@ -58,3 +58,4 @@ Thumbs.db
 # Project-specific generated data
 # =========================
 data/
+tmp/

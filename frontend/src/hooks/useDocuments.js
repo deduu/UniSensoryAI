@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useJobs } from '../context/JobContext'
+import { documentForJob } from '../jobs/presentation'
 
 /**
  * Aggregate all documents from completed jobs.
@@ -15,14 +16,7 @@ export function useDocuments() {
     for (const job of jobs) {
       if (!job.documents) continue
       for (const doc of job.documents) {
-        docs.push({
-          ...doc,
-          job_id: job.job_id,
-          model_id: job.model_id,
-          job_status: job.status,
-          created_at: job.created_at,
-          file_size: job.meta?.file_size,
-        })
+        docs.push(documentForJob(job, doc))
       }
     }
     return docs

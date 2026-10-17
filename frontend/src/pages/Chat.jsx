@@ -1,7 +1,10 @@
-﻿import { useEffect, useState } from 'react'
+﻿import { useEffect, useRef, useState } from 'react'
 import { AlertCircle, X } from 'lucide-react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useChat } from '../hooks/useChat'
+import { useDocuments } from '../hooks/useDocuments'
 import { useSettings } from '../context/SettingsContext'
+import { appendGroundingDocument, resolveGroundingNavigation } from '../chat/grounding'
 import ChatSidebar from '../components/chat/ChatSidebar'
 import ChatToolbar from '../components/chat/ChatToolbar'
 import ChatMessages from '../components/chat/ChatMessages'
@@ -9,7 +12,11 @@ import ChatInput from '../components/chat/ChatInput'
 import DocumentGroundingPanel from '../components/chat/DocumentGroundingPanel'
 
 export default function Chat() {
+  const location = useLocation()
+  const navigate = useNavigate()
+  const { allDocuments } = useDocuments()
   const { apiKeys } = useSettings()
+  const handledGroundingNavigation = useRef(null)
   const [message, setMessage] = useState('')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [docPanelCollapsed, setDocPanelCollapsed] = useState(false)
@@ -25,9 +32,22 @@ export default function Chat() {
   } = useChat()
 
   useEffect(() => {
-    document.title = 'Chat â€” Intelidoc'
+    document.title = 'Chat — Intelidoc'
     loadConversations()
   }, [loadConversations])
+
+  useEffect(() => {
+    if (handledGroundingNavigation.current === location.key) return
+    const handoff = resolveGroundingNavigation(location.state, allDocuments)
+    if (!handoff) return
+
+    handledGroundingNavigation.current = location.key
+    setSelectedDocIds(previous => appendGroundingDocument(previous, handoff.documentId))
+    navigate({ pathname: location.pathname, search: location.search, hash: location.hash }, {
+      replace: true,
+      state: handoff.state,
+    })
+  }, [location, allDocuments, navigate, setSelectedDocIds])
 
   const handleSend = () => {
     if (!message.trim()) return

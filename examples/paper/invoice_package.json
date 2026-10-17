@@ -1,0 +1,22 @@
+{
+  "identity": {"vendor_id": "DEMO-VENDOR", "store_id": "DEMO-STORE", "contract_number": "DEMO-RA-2026"},
+  "invoice": {
+    "source_document_id": "demo-invoice-source",
+    "fields": {
+      "vendor_id": "DEMO-VENDOR", "store_id": "DEMO-STORE", "contract_number": "DEMO-RA-2026",
+      "invoice_number": "DEMO-INV-001", "invoice_date": "2026-06-01",
+      "service_period_start": "2026-06-01", "service_period_end": "2026-06-30",
+      "currency": "IDR", "subtotal": "1000000.00", "tax_amount": "100000.00",
+      "total": "1100000.00", "bank_account": "0012345678"
+    }
+  },
+  "tax_invoices": [{
+    "source_document_id": "demo-tax-source",
+    "fields": {
+      "vendor_id": "DEMO-VENDOR", "store_id": "DEMO-STORE", "contract_number": "DEMO-RA-2026",
+      "invoice_number": "DEMO-INV-001", "tax_invoice_number": "DEMO-TAX-001",
+      "tax_invoice_date": "2026-06-01", "currency": "IDR",
+      "taxable_amount": "1000000.00", "tax_amount": "100000.00", "total": "1100000.00"
+    }
+  }]
+}

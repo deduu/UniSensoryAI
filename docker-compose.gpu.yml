@@ -1,0 +1,12 @@
+# Optional NVIDIA/local-model support. Requires Docker Desktop GPU support.
+# docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build
+services:
+  api:
+    build:
+      args:
+        INSTALL_LOCAL_VLM: "true"
+    gpus: all
+    environment:
+      HF_HOME: /app/models_cache/huggingface
+    volumes:
+      - ${HF_CACHE_DIR:-./models_cache/huggingface}:/app/models_cache/huggingface

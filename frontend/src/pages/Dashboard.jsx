@@ -22,6 +22,7 @@ import { useApp } from '../context/AppContext'
 import { useToast } from '../context/ToastContext'
 import { deleteJob, listJobs } from '../api/jobs'
 import { AVAILABLE_MODELS } from '../api/models'
+import { documentForJob } from '../jobs/presentation'
 
 const TYPE_TABS = [
   { key: 'all',    label: 'All' },
@@ -37,7 +38,7 @@ function isPdfFile(file) {
 }
 
 const STAT_CONFIGS = [
-  { key: 'total',  label: 'Total',  color: 'text-ink',           title: 'All uploads this session' },
+  { key: 'total',  label: 'Total',  color: 'text-ink',           title: 'All saved uploads' },
   { key: 'done',   label: 'Done',   color: 'text-emerald-400',   title: 'Completed extractions' },
   { key: 'active', label: 'Active', color: 'text-amber-400',     title: 'Click to see in-flight jobs' },
   { key: 'failed', label: 'Failed', color: 'text-red-400',       title: 'Click to see failed jobs' },
@@ -335,12 +336,7 @@ export default function Dashboard() {
       for (const local of stale) {
         const server = byId.get(local.job_id)
         if (!server) continue
-        updateJob(local.job_id, {
-          status: server.status,
-          documents: server.documents || [],
-          updated_at: server.updated_at,
-          meta: server.meta,
-        })
+        updateJob(local.job_id, server)
       }
     })()
     // Intentionally only run once on mount; subsequent updates flow through
@@ -407,13 +403,7 @@ export default function Dashboard() {
           action: {
             label: 'View',
             onClick: () => {
-              const doc = {
-                ...job.documents[0],
-                job_id: job.job_id,
-                model_id: job.model_id,
-                job_status: job.status,
-                created_at: job.created_at,
-              }
+              const doc = documentForJob(job, job.documents[0])
               setActiveDoc(doc)
               setMode('review')
             },
@@ -642,6 +632,10 @@ export default function Dashboard() {
     if (activeDoc) setForceActivityView(false)
   }, [activeDoc])
 
+  const showContextPanel = allDocuments.length === 0 || activeDoc || files.length > 0 ||
+    processing > 0 || failed > 0 || forceActivityView ||
+    state === STATES.UPLOADING || state === STATES.ERROR
+
   return (
     <div className="flex h-[calc(100vh-4rem)] gap-3 min-h-0 animate-slide-up-fade">
       {mode === 'review' && activeDoc ? (
@@ -755,7 +749,7 @@ export default function Dashboard() {
       </div>
 
       {/* ── Right context panel ────────────────────────────────────────────── */}
-      <div className="hidden xl:flex shrink-0 flex-col min-h-0 w-[360px] 2xl:w-[384px]">
+      {showContextPanel && <div className="hidden xl:flex shrink-0 flex-col min-h-0 w-[360px] 2xl:w-[384px]">
         <RightContextPanel
           activeDoc={activeDoc}
           files={files}
@@ -773,7 +767,7 @@ export default function Dashboard() {
           failedJobs={failedJobs}
           forceActivityView={forceActivityView}
         />
-      </div>
+      </div>}
 
       {/* Bulk Actions */}
       <BulkActionsBar
