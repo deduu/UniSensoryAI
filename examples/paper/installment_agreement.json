@@ -1,0 +1,70 @@
+{
+  "identity": {
+    "vendor_id": "DEMO-INSTALLMENT-VENDOR",
+    "store_id": "DEMO-INSTALLMENT-STORE",
+    "contract_number": "DEMO-INSTALLMENT-AGREEMENT"
+  },
+  "draft": {
+    "terms": {
+      "vendor_name": "Synthetic installment landlord",
+      "vendor_id": "DEMO-INSTALLMENT-VENDOR",
+      "store_id": "DEMO-INSTALLMENT-STORE",
+      "contract_number": "DEMO-INSTALLMENT-AGREEMENT",
+      "lease_start_date": "2027-01-05",
+      "lease_end_date": "2032-01-04",
+      "payment_schedule": "Synthetic example: two advance cash installments; source conditions require separate review.",
+      "rent_type": "fixed",
+      "currency": "IDR",
+      "fixed_rent": "327777777",
+      "bank_account": "0012345678",
+      "extensions": {
+        "fixed_rent_basis": "annual"
+      },
+      "lease_duration_months": 60,
+      "installment_schedule": {
+        "schedule_id": "synthetic-two-stage-rent",
+        "version": "1",
+        "currency": "IDR",
+        "total_gross": "1638888888",
+        "source_reference": "Synthetic UI scenario, not source document evidence.",
+        "source_discrepancy_note": "Synthetic review scenario: the stated total exceeds annual rent multiplied by five by IDR 3. Preserve the stated installment amounts.",
+        "installments": [
+          {
+            "installment_id": "stage-1",
+            "gross_amount": "983333333",
+            "coverage_start": "2027-01-05",
+            "coverage_end": "2032-01-04",
+            "conditions": [
+              "Synthetic test: verify complete invoice and signature conditions before payment."
+            ]
+          },
+          {
+            "installment_id": "stage-2",
+            "gross_amount": "655555555",
+            "coverage_start": "2027-01-05",
+            "coverage_end": "2032-01-04",
+            "conditions": [
+              "Synthetic test: verify the second installment trigger and required documents."
+            ]
+          }
+        ]
+      },
+      "withholding_policy": {
+        "policy_id": "synthetic-rent-withholding",
+        "version": "1",
+        "rate": "0.1",
+        "rounding_mode": "down",
+        "decimal_places": 0,
+        "source_reference": "Synthetic reviewed policy for local arithmetic testing; not a tax determination."
+      }
+    },
+    "effective_from": "2027-01-05",
+    "effective_to": "2032-01-04",
+    "source_document_ids": [
+      "demo-installment-agreement-source"
+    ],
+    "evidence": [],
+    "extraction_warnings": [],
+    "change_reason": "Synthetic installment and withholding UI scenario; review and approve explicitly."
+  }
+}

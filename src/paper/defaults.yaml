@@ -1,0 +1,19 @@
+required_agreement_fields:
+  - vendor_name
+  - store_id
+  - contract_number
+  - lease_start_date
+  - lease_end_date
+  - payment_schedule
+  - rent_type
+  - currency
+required_fields_by_rent_type:
+  fixed: [fixed_rent]
+  revenue_share: [revenue_share_rate]
+  mixed: [fixed_rent, revenue_share_rate]
+approver_roles:
+  - admin
+  - accountant
+  - ap_approver
+require_independent_approval: false
+repository_timeout_seconds: 15

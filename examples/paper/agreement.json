@@ -1,0 +1,16 @@
+{
+  "identity": {"vendor_id": "DEMO-VENDOR", "store_id": "DEMO-STORE", "contract_number": "DEMO-RA-2026"},
+  "draft": {
+    "terms": {
+      "vendor_name": "Synthetic landlord", "vendor_id": "DEMO-VENDOR",
+      "store_id": "DEMO-STORE", "contract_number": "DEMO-RA-2026",
+      "lease_start_date": "2026-01-01", "lease_end_date": "2026-12-31",
+      "payment_schedule": "Monthly", "rent_type": "fixed", "currency": "IDR",
+      "fixed_rent": "1000000.00", "bank_account": "0012345678",
+      "extensions": {"fixed_rent_basis": "monthly"}
+    },
+    "effective_from": "2026-01-01", "effective_to": "2026-12-31",
+    "source_document_ids": ["demo-agreement-source"],
+    "change_reason": "Synthetic UI test agreement"
+  }
+}

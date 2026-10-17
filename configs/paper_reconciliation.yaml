@@ -1,0 +1,18 @@
+# Host-owned deterministic rules. No model/provider configuration belongs here.
+policy_id: paper.manual_reconciliation
+policy_version: "2"
+enabled_rules: [installments, withholding]
+# Only an approved withholding policy with explicit zero VAT can use this path.
+# Required evidence replaces the VAT document requirement; it is not fabricated.
+allow_withholding_without_vat_invoice: true
+withholding_required_supporting_types: [withholding_certificate]
+override_codes:
+  - bank_mismatch
+  - bank_reference_missing
+  - amount_mismatch
+  - pricing_basis_unconfigured
+  - unsupported_pricing
+  - extraction_warnings
+  - approved_installment_allocation
+  - installment_conditions_review
+  - source_pricing_discrepancy
