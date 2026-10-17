@@ -17,7 +17,7 @@ _MOCK_MODULES = [
     "torch", "torch.cuda", "torch.nn", "torch.nn.functional",
     "torchvision", "torchvision.transforms",
     "transformers", "accelerate", "bitsandbytes",
-    "nvitop", "fitz", "pymupdf", "pymupdf.extra", "pymupdf._extra",
+    "nvitop",
 ]
 for mod in _MOCK_MODULES:
     if mod not in sys.modules:

@@ -9,7 +9,6 @@ import pytest
 
 # Stub heavy deps before pipeline imports trigger them.
 _MOCK_MODULES = [
-    "fitz",
     "torch", "torch.cuda", "torch.nn", "torch.nn.functional",
     "torchvision", "torchvision.transforms",
     "transformers", "accelerate", "bitsandbytes",

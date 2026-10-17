@@ -109,7 +109,7 @@ class TestConversionStage:
 
     @pytest.mark.asyncio
     async def test_calls_converter(self, sample_image):
-        """ConversionStage should call DocumentConverter.convert."""
+        """ConversionStage should call DocumentConverter.convert_hybrid."""
         stage = ConversionStage()
         result = await stage.execute({"file_path": sample_image})
         assert "content_items" in result
@@ -119,7 +119,7 @@ class TestConversionStage:
     async def test_passes_page_range(self, sample_pdf):
         """Page range parameters should be forwarded to converter."""
         with patch(
-            "src.pipeline.stages.conversion_stage.DocumentConverter.convert",
+            "src.pipeline.stages.conversion_stage.DocumentConverter.convert_hybrid",
             return_value=[MagicMock()],
         ) as mock_convert:
             stage = ConversionStage()
@@ -134,7 +134,7 @@ class TestConversionStage:
     async def test_raises_on_empty_content(self, tmp_path):
         """Empty conversion result should raise ValueError."""
         with patch(
-            "src.pipeline.stages.conversion_stage.DocumentConverter.convert",
+            "src.pipeline.stages.conversion_stage.DocumentConverter.convert_hybrid",
             return_value=[],
         ):
             stage = ConversionStage()

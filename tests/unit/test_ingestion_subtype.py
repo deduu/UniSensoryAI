@@ -6,10 +6,8 @@ from unittest.mock import MagicMock
 import pytest
 
 # Same heavy-deps stubbing pattern as test_inference_parallel.py — the
-# pipeline package eagerly imports converter.py (PyMuPDF) and the models
-# package (transformers).
+# pipeline package eagerly imports the models package (transformers).
 _MOCK_MODULES = [
-    "fitz",
     "torch", "torch.cuda", "torch.nn", "torch.nn.functional",
     "torchvision", "torchvision.transforms",
     "transformers", "accelerate", "bitsandbytes",

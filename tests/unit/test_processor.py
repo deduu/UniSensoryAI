@@ -22,7 +22,7 @@ async def test_process_document_job_uses_provided_model_id(tmp_path):
 
     with (
         patch(
-            "src.pipeline.stages.conversion_stage.DocumentConverter.convert",
+            "src.pipeline.stages.conversion_stage.DocumentConverter.convert_hybrid",
             return_value=["text content"],
         ),
         patch(
@@ -48,7 +48,7 @@ async def test_process_document_job_defaults_model_id(tmp_path):
 
     with (
         patch(
-            "src.pipeline.stages.conversion_stage.DocumentConverter.convert",
+            "src.pipeline.stages.conversion_stage.DocumentConverter.convert_hybrid",
             return_value=["text content"],
         ),
         patch(
@@ -74,7 +74,7 @@ async def test_process_document_job_text_processing(tmp_path):
 
     with (
         patch(
-            "src.pipeline.stages.conversion_stage.DocumentConverter.convert",
+            "src.pipeline.stages.conversion_stage.DocumentConverter.convert_hybrid",
             return_value=["Sheet content here"],
         ),
         patch(
@@ -104,7 +104,7 @@ async def test_process_document_job_image_processing(tmp_path):
 
     with (
         patch(
-            "src.pipeline.stages.conversion_stage.DocumentConverter.convert",
+            "src.pipeline.stages.conversion_stage.DocumentConverter.convert_hybrid",
             return_value=[pil_image],
         ),
         patch(
@@ -139,7 +139,7 @@ async def test_process_document_job_conversion_failure(tmp_path):
     fake_path.touch()
 
     with patch(
-        "src.pipeline.stages.conversion_stage.DocumentConverter.convert",
+        "src.pipeline.stages.conversion_stage.DocumentConverter.convert_hybrid",
         side_effect=RuntimeError("conversion error"),
     ):
         from src.ingestion.processor import process_document_job
