@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Eye, MessageSquare, Download, Trash2, Loader2, Plus, X as XIcon, Sparkles } from 'lucide-react'
 import Badge from '../ui/Badge'
+import { modelLabel } from '../../jobs/presentation'
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -103,7 +104,7 @@ function DocumentPreviewPanel({
 
   const META = [
     { label: 'Status',    value: null, badge: true },
-    { label: 'Model',     value: doc.model_id || '—' },
+    { label: 'Model',     value: modelLabel(doc) },
     { label: 'Type',      value: typeLabel },
     { label: 'Processed', value: relativeTime(doc.created_at) },
     { label: 'Size',      value: formatSize(doc.file_size) },

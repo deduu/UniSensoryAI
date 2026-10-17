@@ -28,7 +28,8 @@ import { Document, Page, pdfjs } from 'react-pdf'
 import 'react-pdf/dist/Page/AnnotationLayer.css'
 import 'react-pdf/dist/Page/TextLayer.css'
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
-import { deleteJob, retryJob } from '../../api/jobs'
+import { deleteJob, getJob, retryJob } from '../../api/jobs'
+import { documentForJob, findJobDocument, modelDescription, modelLabel } from '../../jobs/presentation'
 import { useApp } from '../../context/AppContext'
 import { useJobs } from '../../context/JobContext'
 import PolicyReviewPanel from './PolicyReviewPanel'
@@ -484,7 +485,7 @@ function MetadataTab({ doc }) {
     { label: 'document_id', value: doc.id },
     { label: 'job_id', value: doc.job_id },
     { label: 'filename', value: doc.filename },
-    { label: 'model', value: doc.model_id },
+    { label: 'model', value: modelLabel(doc) },
     { label: 'status', value: doc.job_status },
     { label: 'created_at', value: doc.created_at ? new Date(doc.created_at).toLocaleString() : null },
     { label: 'processed_at', value: doc.processed_at || doc.updated_at ? new Date(doc.processed_at || doc.updated_at).toLocaleString() : null },
@@ -502,7 +503,7 @@ function MetadataTab({ doc }) {
         {fields.map(({ label, value }) => (
           <div key={label} className="grid grid-cols-[180px_minmax(0,1fr)] gap-4 border-b border-surface-border px-4 py-3 last:border-b-0">
             <span className="text-xs font-semibold uppercase tracking-wider text-ink-faint">{label}</span>
-            <span className="truncate font-mono text-sm text-ink-muted">{value == null || value === '' ? '-' : String(value)}</span>
+            <span title={label === 'model' ? modelDescription(doc) : undefined} className="break-words font-mono text-sm text-ink-muted">{value == null || value === '' ? '-' : String(value)}</span>
           </div>
         ))}
       </div>
@@ -527,13 +528,12 @@ export default function SplitViewer({ doc, documents = [], isOpen, onClose, onSe
   const containerRef = useRef(null)
 
   const [activeTab, setActiveTab] = useState('content')
-  const [fullContentText, setFullContentText] = useState(null)
   const [splitPct, setSplitPct] = useState(50)
   const [leftScrollEl, setLeftScrollEl] = useState(null)
   const [rightScrollEl, setRightScrollEl] = useState(null)
   const [isDraggingDivider, setIsDraggingDivider] = useState(false)
   const [showPreview, setShowPreview] = useState(true)
-  const [activePolicyReview, setActivePolicyReview] = useState(doc?.policy_review || null)
+  const [policyOverride, setPolicyOverride] = useState(null)
   const [isDocumentDrawerOpen, setIsDocumentDrawerOpen] = useState(false)
   const [documentSearch, setDocumentSearch] = useState('')
   const [copiedParsed, setCopiedParsed] = useState(false)
@@ -545,17 +545,13 @@ export default function SplitViewer({ doc, documents = [], isOpen, onClose, onSe
   const job = jobs.find((item) => item.job_id === doc?.job_id)
   const isFailed = job?.status === 'failed'
   const displayName = doc ? getFriendlyName(doc) : 'Document'
-  const enrichedDoc = useMemo(
-    () =>
-      doc
-        ? {
-            ...doc,
-            ...(fullContentText != null ? { content_text: fullContentText } : {}),
-            ...(activePolicyReview ? { policy_review: activePolicyReview } : {}),
-          }
-        : doc,
-    [doc, fullContentText, activePolicyReview]
-  )
+  const enrichedDoc = useMemo(() => {
+    if (!doc) return doc
+    const current = job ? findJobDocument(job, doc.id) || documentForJob(job, doc) : doc
+    const hasPolicyOverride = policyOverride?.documentId === doc.id
+      && policyOverride?.jobId === doc.job_id && policyOverride?.backendUrl === backendUrl
+    return hasPolicyOverride ? { ...current, policy_review: policyOverride.review } : current
+  }, [doc, job, policyOverride, backendUrl])
   const rawJson = useMemo(() => JSON.stringify(enrichedDoc || {}, null, 2), [enrichedDoc])
   const currentDocId = doc?.id ?? doc?.job_id ?? null
   const currentDocIndex = useMemo(
@@ -584,25 +580,25 @@ export default function SplitViewer({ doc, documents = [], isOpen, onClose, onSe
     setConfirmDelete(false)
     setActionError(null)
     setCopiedParsed(false)
-    setFullContentText(null)
-    setActivePolicyReview(doc?.policy_review || null)
+    setPolicyOverride(null)
     setIsDocumentDrawerOpen(false)
     setDocumentSearch('')
     setActiveTab('content')
-  }, [currentDocId, doc?.policy_review])
+  }, [currentDocId, doc?.job_id, backendUrl])
 
   useEffect(() => {
-    if (!doc?.job_id || !backendUrl) return
-    fetch(`${backendUrl}/v1/jobs/${doc.job_id}`)
-      .then((r) => (r.ok ? r.json() : null))
+    if (!isOpen || !doc?.job_id) return undefined
+    let cancelled = false
+    getJob(doc.job_id, backendUrl)
       .then((data) => {
-        const document = data?.documents?.[0]
-        const text = document?.content_text
-        if (text != null) setFullContentText(text)
-        if (document?.policy_review) setActivePolicyReview(document.policy_review)
+        if (cancelled) return
+        const refreshed = findJobDocument(data, doc.id)
+        if (!refreshed) return
+        updateJob(data.job_id, data)
       })
       .catch(() => {})
-  }, [doc?.job_id, backendUrl])
+    return () => { cancelled = true }
+  }, [isOpen, doc?.job_id, doc?.id, backendUrl, updateJob])
 
   useEffect(() => {
     if (!leftScrollEl || !rightScrollEl) return
@@ -665,7 +661,7 @@ export default function SplitViewer({ doc, documents = [], isOpen, onClose, onSe
   }
 
   const handleOpenChat = () => {
-    navigate('/chat', { state: { groundingDoc: doc } })
+    navigate('/chat', { state: { groundingDoc: enrichedDoc } })
   }
 
   const handleDelete = async () => {
@@ -712,8 +708,8 @@ export default function SplitViewer({ doc, documents = [], isOpen, onClose, onSe
   )
 
   const handlePolicyResultChange = useCallback((review) => {
-    setActivePolicyReview(review)
-  }, [])
+    setPolicyOverride({ documentId: doc?.id, jobId: doc?.job_id, backendUrl, review })
+  }, [doc?.id, doc?.job_id, backendUrl])
 
   const handleStepDoc = useCallback(
     (delta) => {
@@ -788,10 +784,10 @@ export default function SplitViewer({ doc, documents = [], isOpen, onClose, onSe
         </div>
 
         <div className="ml-auto flex shrink-0 items-center gap-2">
-          <Badge variant={doc.job_status} dot>{doc.job_status}</Badge>
-          <span className="hidden max-w-36 items-center gap-1 rounded-md border border-surface-border bg-surface-muted px-2 py-1 text-[11px] font-mono text-ink-muted md:inline-flex">
+          <Badge variant={enrichedDoc.job_status} dot>{enrichedDoc.job_status}</Badge>
+          <span title={modelDescription(enrichedDoc)} className="hidden max-w-48 items-center gap-1 rounded-md border border-surface-border bg-surface-muted px-2 py-1 text-[11px] font-mono text-ink-muted md:inline-flex">
             <Cpu className="h-3 w-3" />
-            <span className="truncate">{doc.model_id || 'No model'}</span>
+            <span className="truncate">{modelLabel(enrichedDoc)}</span>
           </span>
         </div>
 
@@ -902,7 +898,7 @@ export default function SplitViewer({ doc, documents = [], isOpen, onClose, onSe
                         </div>
                         <p className="mt-1 truncate text-xs text-ink-faint">{item.filename || 'Untitled file'}</p>
                         <div className="mt-2 flex items-center gap-2 text-[11px] text-ink-faint">
-                          <span className="truncate font-mono">{item.model_id || 'No model'}</span>
+                          <span title={modelDescription(item)} className="truncate font-mono">{modelLabel(item)}</span>
                           {item.created_at && <span>{new Date(item.created_at).toLocaleDateString()}</span>}
                         </div>
                       </div>
@@ -932,9 +928,9 @@ export default function SplitViewer({ doc, documents = [], isOpen, onClose, onSe
               </div>
               <div className="flex-1 min-h-0 overflow-hidden bg-surface-subtle/20">
                 <OriginalPreview
-                  doc={doc}
+                  doc={enrichedDoc}
                   backendUrl={backendUrl}
-                  policyReview={activePolicyReview}
+                  policyReview={enrichedDoc.policy_review}
                   scrollRef={setLeftScrollEl}
                 />
               </div>

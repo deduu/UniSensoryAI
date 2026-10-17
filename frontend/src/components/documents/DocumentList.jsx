@@ -6,6 +6,7 @@ import {
   File,
 } from 'lucide-react'
 import Badge from '../ui/Badge'
+import { modelDescription, modelLabel } from '../../jobs/presentation'
 
 const FILE_ICONS = {
   pdf: FileText,
@@ -105,11 +106,9 @@ export default function DocumentList({
                 {preview}
               </p>
               <div className="mt-1 flex items-center gap-3 text-xs text-ink-faint">
-                {doc.model_id && (
-                  <span className="rounded bg-surface-subtle px-1.5 py-0.5 font-mono">
-                    {doc.model_id}
-                  </span>
-                )}
+                <span title={modelDescription(doc)} className="rounded bg-surface-subtle px-1.5 py-0.5 font-mono">
+                  {modelLabel(doc)}
+                </span>
                 <span>{relativeTime(doc.created_at)}</span>
               </div>
             </div>

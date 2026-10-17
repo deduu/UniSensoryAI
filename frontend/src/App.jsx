@@ -6,6 +6,9 @@ import Chat from './pages/Chat'
 import Login from './pages/Login'
 import Models from './pages/Models'
 import Settings from './pages/Settings'
+import Paper from './pages/Paper'
+import Documents from './pages/Documents'
+import Parse from './pages/Parse'
 
 export default function App() {
   return (
@@ -14,8 +17,10 @@ export default function App() {
       <Route element={<ProtectedRoute />}>
         <Route element={<AppShell />}>
           <Route index element={<Dashboard />} />
-          <Route path="documents" element={<Navigate to="/" replace />} />
+          <Route path="documents" element={<Documents />} />
+          <Route path="uploads" element={<Parse />} />
           <Route path="chat" element={<Chat />} />
+          <Route path="paper" element={<Paper />} />
           <Route path="models" element={<Models />} />
           <Route path="settings" element={<Settings />} />
           <Route path="*" element={<Navigate to="/" replace />} />

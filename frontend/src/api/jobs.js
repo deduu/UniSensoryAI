@@ -1,4 +1,5 @@
-import { apiFetch } from './client'
+import { apiFetch } from './client.js'
+import { modelIds } from '../jobs/presentation.js'
 
 /**
  * Normalize a backend job object to a consistent frontend shape.
@@ -6,10 +7,13 @@ import { apiFetch } from './client'
  * - Hoists model_id from meta to root level
  */
 function normalizeJob(job) {
+  const ids = modelIds(job)
   return {
     ...job,
     status: job.status?.toLowerCase(),
-    model_id: job.model_id || job.meta?.model_id || null,
+    model_id: ids.length === 1 ? ids[0] : null,
+    model_ids: ids,
+    model_usage_recorded: job.model_usage_recorded ?? (job.meta?.model_ids !== undefined),
   }
 }
 

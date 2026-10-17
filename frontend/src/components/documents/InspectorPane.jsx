@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import PolicyReviewPanel from './PolicyReviewPanel'
+import { modelLabel } from '../../jobs/presentation'
 
 const TABS = [
   { key: 'content', label: 'Content' },
@@ -77,7 +78,7 @@ function MetadataTab({ doc }) {
     { icon: Hash, label: 'Job ID', value: doc.job_id || '—' },
     { icon: FileText, label: 'Filename', value: doc.filename || '—' },
     { icon: Tag, label: 'Status', value: doc.job_status || '—' },
-    { icon: Cpu, label: 'Model', value: doc.model_id || '—' },
+    { icon: Cpu, label: 'Model', value: modelLabel(doc) },
     { icon: Layers, label: 'Pages', value: doc.page_count || doc.pages || '—' },
     {
       icon: Clock,

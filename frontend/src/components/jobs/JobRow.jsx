@@ -1,5 +1,6 @@
 import { FileText, Trash2 } from 'lucide-react'
 import JobStatusBadge from './JobStatusBadge'
+import { modelDescription, modelLabel } from '../../jobs/presentation'
 
 function timeAgo(dateStr) {
   if (!dateStr) return ''
@@ -21,13 +22,13 @@ export default function JobRow({ job, onClick, onDelete }) {
       <td className="px-4 py-3">
         <div className="flex items-center gap-3">
           <FileText className="h-4 w-4 shrink-0 text-ink-faint" />
-          <span className="truncate text-sm font-medium text-ink">{job.filename || job.job_id}</span>
+          <span className="min-w-0"><span className="block truncate text-sm font-medium text-ink">{job.filename || job.job_id}</span>{job.meta?.workflow === 'paper_extraction' && <span className="block text-xs text-ink-muted">PAPER extraction</span>}</span>
         </div>
       </td>
       <td className="px-4 py-3">
         <JobStatusBadge status={job.status} />
       </td>
-      <td className="px-4 py-3 text-sm text-ink-muted">{job.model_id || '—'}</td>
+      <td title={modelDescription(job)} className="px-4 py-3 text-sm text-ink-muted">{modelLabel(job)}</td>
       <td className="px-4 py-3 text-sm text-ink-muted">{job.documents?.length || 0}</td>
       <td className="px-4 py-3 text-sm text-ink-muted">{timeAgo(job.created_at)}</td>
       <td className="px-4 py-3">

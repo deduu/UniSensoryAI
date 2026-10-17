@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { modelDescription, modelLabel } from '../../jobs/presentation'
 import {
   FileText,
   FileSpreadsheet,
@@ -95,10 +96,10 @@ const HIDE_WHEN_PANE = new Set(['model_id', 'created_at', 'file_size', 'type'])
 function RowActions({ doc, onPreview, onChat, onDownload, onDelete }) {
   return (
     <div className="flex items-center justify-end gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
-      <ActionBtn icon={Eye}            label="Preview"           onClick={() => onPreview(doc)}  />
-      <ActionBtn icon={MessageSquare}  label="Chat"              onClick={() => onChat(doc)}     className="text-brand/60 hover:text-brand hover:bg-brand/10" />
-      <ActionBtn icon={Download}       label="Download"          onClick={() => onDownload(doc)} />
-      <ActionBtn icon={Trash2}         label="Delete"            onClick={() => onDelete(doc)}   className="hover:text-red-400 hover:bg-red-400/10" />
+      {onPreview && <ActionBtn icon={Eye}            label="Preview"           onClick={() => onPreview(doc)}  />}
+      {onChat && <ActionBtn icon={MessageSquare}  label="Chat"              onClick={() => onChat(doc)}     className="text-brand/60 hover:text-brand hover:bg-brand/10" />}
+      {onDownload && <ActionBtn icon={Download}       label="Download"          onClick={() => onDownload(doc)} />}
+      {onDelete && <ActionBtn icon={Trash2}         label="Delete"            onClick={() => onDelete(doc)}   className="hover:text-red-400 hover:bg-red-400/10" />}
     </div>
   )
 }
@@ -150,8 +151,8 @@ export default function DocumentTable({
 
   const sorted = [...documents].sort((a, b) => {
     if (!sortKey) return 0
-    let va = a[sortKey] ?? ''
-    let vb = b[sortKey] ?? ''
+    let va = sortKey === 'model_id' ? modelLabel(a) : a[sortKey] ?? ''
+    let vb = sortKey === 'model_id' ? modelLabel(b) : b[sortKey] ?? ''
     if (typeof va === 'string') va = va.toLowerCase()
     if (typeof vb === 'string') vb = vb.toLowerCase()
     if (va < vb) return sortDir === 'asc' ? -1 : 1
@@ -165,7 +166,7 @@ export default function DocumentTable({
   return (
     <div className="overflow-hidden rounded-xl border border-surface-border flex flex-col h-full">
       <div className="flex-1 overflow-auto">
-        <table className="w-full text-left text-sm table-fixed min-w-[480px]">
+        <table className={`w-full text-left text-sm table-fixed ${isPaneOpen ? 'min-w-[480px]' : 'min-w-[640px] sm:min-w-[736px] md:min-w-[880px] lg:min-w-[960px]'}`}>
           <thead>
             <tr className="border-b border-surface-border bg-surface-muted/60">
               {/* Checkbox */}
@@ -186,7 +187,7 @@ export default function DocumentTable({
                   col.key === 'filename'   ? 'w-auto' :
                   col.key === 'type'       ? 'w-24 hidden sm:table-cell' :
                   col.key === 'job_status' ? 'w-28' :
-                  col.key === 'model_id'   ? 'w-32 hidden md:table-cell' :
+                  col.key === 'model_id'   ? 'w-36 hidden md:table-cell' :
                   col.key === 'created_at' ? 'w-28' :
                   col.key === 'file_size'  ? 'w-20 hidden lg:table-cell' :
                   ''
@@ -247,7 +248,7 @@ export default function DocumentTable({
                         <Icon className="h-4 w-4 text-brand" />
                       </div>
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-ink leading-tight">
+                        <p title={doc.filename} className="truncate text-sm font-medium text-ink leading-tight">
                           {friendlyName}
                         </p>
                         {shortId && (
@@ -276,8 +277,8 @@ export default function DocumentTable({
                   {/* Model */}
                   {(!isPaneOpen) && (
                     <td className="px-4 py-2.5 hidden md:table-cell">
-                      <span className="rounded-md bg-surface-muted border border-surface-border px-2 py-0.5 text-[11px] font-mono text-ink-muted truncate max-w-full inline-block">
-                        {doc.model_id || '—'}
+                      <span title={modelDescription(doc)} className="rounded-md bg-surface-muted border border-surface-border px-2 py-0.5 text-[11px] font-mono text-ink-muted truncate max-w-full inline-block">
+                        {modelLabel(doc)}
                       </span>
                     </td>
                   )}

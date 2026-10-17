@@ -1,5 +1,8 @@
 import {
   ChevronUp,
+  ClipboardCheck,
+  Files,
+  History,
   Cpu,
   LayoutDashboard,
   LogOut,
@@ -17,6 +20,9 @@ import { useAuth } from '../../context/AuthContext'
 
 const NAV_ITEMS = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
+  { to: '/paper', icon: ClipboardCheck, label: 'PAPER review' },
+  { to: '/uploads', icon: History, label: 'Upload history' },
+  { to: '/documents', icon: Files, label: 'Documents' },
   { to: '/chat', icon: MessageSquare, label: 'Chat' },
   { to: '/models', icon: Cpu, label: 'Models' },
 ]
@@ -54,26 +60,26 @@ export default function Sidebar() {
   }, [accountOpen])
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-30 flex w-64 flex-col bg-surface-glass backdrop-blur-xl transition-all duration-300">
-      <div className="flex h-16 items-center gap-3 px-5 bg-surface/20">
-        <div className="relative flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-brand to-cyan-400 text-white font-bold text-sm shadow-[0_0_15px_rgba(99,102,241,0.5)]">
+    <aside className="fixed inset-y-0 left-0 z-30 flex w-16 flex-col bg-surface-glass backdrop-blur-xl transition-all duration-300 md:w-64">
+      <div className="flex h-16 items-center justify-center gap-3 bg-surface/20 px-2 md:justify-start md:px-5">
+        <div title="Intelidoc" className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand to-cyan-400 text-white font-bold text-sm shadow-[0_0_15px_rgba(99,102,241,0.5)]">
           I
           <div className="absolute inset-0 rounded-xl bg-white/20 blur-sm mix-blend-overlay" />
         </div>
-        <span className="text-lg font-bold text-ink tracking-tight">
+        <span className="hidden text-lg font-bold text-ink tracking-tight md:inline">
           Intelidoc
         </span>
       </div>
 
-      <nav className="flex-1 space-y-1.5 overflow-y-auto px-3 py-6">
+      <nav aria-label="Main navigation" className="flex-1 space-y-1.5 overflow-y-auto px-2 py-6 md:px-3">
         {NAV_ITEMS.map((item) => (
           <SidebarItem key={item.to} {...item} />
         ))}
       </nav>
 
-      <div ref={accountRef} className="relative bg-surface/30 p-3 backdrop-blur-sm">
+      <div ref={accountRef} className="relative bg-surface/30 p-2 backdrop-blur-sm md:p-3">
         {accountOpen && (
-          <div className="absolute bottom-full left-3 right-3 mb-2 overflow-hidden rounded-xl border border-surface-border bg-surface shadow-card">
+          <div className="absolute bottom-full left-2 mb-2 w-56 max-w-[calc(100vw-1rem)] overflow-hidden rounded-xl border border-surface-border bg-surface shadow-card md:left-3 md:right-3 md:w-auto">
             <div className="px-3 py-3">
               <p className="text-xs font-semibold text-ink">My Account</p>
               <p className="mt-1 text-[11px] text-ink-faint">Account actions</p>
@@ -111,19 +117,20 @@ export default function Sidebar() {
           type="button"
           aria-expanded={accountOpen}
           aria-label="Open account menu"
+          title="Open account menu"
           onClick={() => setAccountOpen((open) => !open)}
-          className="flex w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left transition-colors hover:bg-surface-subtle"
+          className="flex w-full items-center justify-center gap-3 rounded-xl px-0 py-2.5 text-left transition-colors hover:bg-surface-subtle md:justify-start md:px-2"
         >
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand/80 to-cyan-500/80 text-white select-none">
             <User className="h-4 w-4" />
           </div>
-          <div className="flex-1 min-w-0">
+          <div className="hidden min-w-0 flex-1 md:block">
             <p className="text-sm font-medium text-ink truncate">
               {user?.email || user?.user_id || 'My Account'}
             </p>
             <p className="mt-0.5 truncate text-[11px] text-ink-faint">Settings and session</p>
           </div>
-          <ChevronUp className={`h-4 w-4 shrink-0 text-ink-faint transition-transform ${accountOpen ? 'rotate-180' : ''}`} />
+          <ChevronUp className={`hidden h-4 w-4 shrink-0 text-ink-faint transition-transform md:block ${accountOpen ? 'rotate-180' : ''}`} />
         </button>
       </div>
     </aside>

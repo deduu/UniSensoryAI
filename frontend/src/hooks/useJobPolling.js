@@ -22,12 +22,7 @@ export function useJobPolling(jobId, interval = 2000) {
         if (!active) return
 
         // Status is already normalized to lowercase by the API layer (jobs.js)
-        updateJob(jobId, {
-          status: data.status,
-          documents: data.documents || [],
-          updated_at: data.updated_at,
-          meta: data.meta,
-        })
+        updateJob(jobId, data)
 
         const terminal = ['completed', 'failed']
         if (terminal.includes(data.status)) {
