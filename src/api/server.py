@@ -1,16 +1,21 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form, Depends, Query, Request
-from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.responses import StreamingResponse, FileResponse, HTMLResponse
 from src.api.validators import UploadValidator
 from src.api.auth import UserContext, get_user_context
 from src.api.auth_routes import router as auth_router
 from src.api.extraction_routes import router as extraction_router
+from src.api.extraction_routes import get_extraction_service
+from src.api.paper_extraction_routes import router as paper_extraction_router
+from src.api.paper_routes import router as paper_router
+from src.api.paper_case_routes import router as paper_case_router
+from src.api.paper_case_routes import review_router as paper_review_router
 from src.api.rate_limit import RateLimitDep
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from fastapi.responses import JSONResponse
-from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 import shutil
+import asyncio
 import os
 import uuid
 import json
@@ -25,7 +30,11 @@ from src.ingestion import init_ingestion_queue, get_ingestion_queue
 from src.ingestion.converter import DocumentConverter
 from src.ingestion.processor import process_document_job
 from src.services.ingestion import IngestionService
-from src.db.models.ingestion import IngestionStatus
+from src.services.upload_storage import get_upload_directory, resolve_upload_path
+from src.services.paper_extraction import PaperExtractionProcessor
+from src.extraction.service import ExtractionService
+from src.extraction.contracts import ExtractionOptions
+from src.db.models.ingestion import IngestionJob, IngestionStatus
 from src.services.chat import ChatService
 from src.services.exceptions import NotFoundException
 from src.policy.models import PolicyReviewRequest
@@ -44,8 +53,7 @@ logger = get_logger("api")
 
 # Load environment configs
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://postgres:postgres@127.0.0.1:5434/unisensory")
-UPLOAD_DIR = Path("data/uploads")
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+UPLOAD_DIR = get_upload_directory()
 
 
 def _truncate_content(content: str | None, *, limit: int = 500) -> str | None:
@@ -78,6 +86,44 @@ def _serialize_document(doc, *, truncate: bool = False) -> dict:
         "policy_review": _policy_review_from_chunks(content_chunks),
     }
 
+
+def _public_job_metadata(metadata: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Exclude persisted worker credentials from user-visible history."""
+    if metadata is None:
+        return None
+    return {key: value for key, value in metadata.items() if key not in {"api_keys", "api_key"}}
+
+
+def _paper_artifact_names(job: IngestionJob, tenant_id: str) -> list[str]:
+    """Collect only typed, tenant-owned extraction artifact basenames for cleanup."""
+    artifacts: list[str] = []
+    suffix = ".paper-extraction.json"
+    for document in job.documents:
+        if document.tenant_id != tenant_id:
+            continue
+        chunks = document.content_chunks
+        if not isinstance(chunks, list):
+            continue
+        for chunk in chunks:
+            if not isinstance(chunk, dict):
+                continue
+            name = chunk.get("artifact_name")
+            if (
+                chunk.get("type") != "paper_extraction_artifact"
+                or chunk.get("version") != "1"
+                or not isinstance(name, str)
+                or not name.endswith(suffix)
+            ):
+                continue
+            identifier = name[: -len(suffix)]
+            try:
+                if str(uuid.UUID(identifier)) == identifier:
+                    artifacts.append(name)
+            except ValueError:
+                continue
+    return artifacts
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Start host services and release application-owned resources on shutdown.
@@ -89,12 +135,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         Control to the running application after startup completes.
     """
     # Startup
+    await asyncio.to_thread(UPLOAD_DIR.mkdir, parents=True, exist_ok=True)
     logger.info("Initializing Database...")
     init_db(DATABASE_URL)
 
     # Recover orphaned jobs from a previous run. The in-memory worker queue
     # doesn't survive restarts, so anything still PENDING/PROCESSING is dead.
-    if db_session.session_manager is not None:
+    if os.getenv("QUEUE_BACKEND", "memory") != "redis" and db_session.session_manager is not None:
         async with db_session.session_manager.session() as session:
             service = IngestionService(session)
             recovered = await service.fail_interrupted_jobs()
@@ -103,7 +150,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 logger.warning(f"Marked {recovered} interrupted job(s) as FAILED on startup")
 
     logger.info("Initializing Ingestion Queue...")
-    queue = init_ingestion_queue(process_document_job)
+    async def extraction_factory() -> ExtractionService:
+        """Resolve the app-owned runtime lazily for a queued extraction."""
+        return await get_extraction_service(Request({"type": "http", "app": app}))
+
+    paper_processor = PaperExtractionProcessor(
+        service_factory=extraction_factory,
+        options=ExtractionOptions.model_validate(
+            {"timeout_seconds": os.getenv("EXTRACTION_WORKFLOW_TIMEOUT_SECONDS", "1800")}
+        ),
+    )
+    queue = init_ingestion_queue(
+        process_document_job,
+        workflow_handlers={"paper_extraction": paper_processor.process},
+    )
     await queue.start_worker()
 
     try:
@@ -118,6 +178,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 app.state.extraction_service = None
                 app.state.extraction_service_owned = False
                 await extraction_service.aclose()
+
 
 app = FastAPI(
     title="UniSensoryAI Document Processing API",
@@ -149,6 +210,10 @@ app.add_middleware(
 
 app.include_router(auth_router)
 app.include_router(extraction_router)
+app.include_router(paper_extraction_router)
+app.include_router(paper_router)
+app.include_router(paper_case_router)
+app.include_router(paper_review_router)
 
 @app.get("/")
 @app.get("/health")
@@ -247,7 +312,7 @@ async def list_jobs(
                 "created_at": job.created_at.isoformat(),
                 "updated_at": job.updated_at.isoformat(),
                 "file_path": job.file_path,
-                "meta": job.meta,
+                "meta": _public_job_metadata(job.meta),
                 "documents": [
                     _serialize_document(doc)
                     for doc in job.documents
@@ -281,7 +346,7 @@ async def get_job_status(
             "created_at": job.created_at.isoformat(),
             "updated_at": job.updated_at.isoformat(),
             "file_path": job.file_path,
-            "meta": job.meta,
+            "meta": _public_job_metadata(job.meta),
             "documents": [
                 _serialize_document(doc)
                 for doc in job.documents
@@ -312,17 +377,17 @@ async def delete_job(
         if not job:
             raise HTTPException(status_code=404, detail="Job not found")
 
-        # Clean up uploaded file from disk
-        try:
-            file_path = Path(job.file_path)
-            if file_path.exists():
-                file_path.unlink()
-        except OSError as file_err:
-            logger.warning(f"Could not delete file {job.file_path}: {file_err}")
-
-        # Cascade deletes documents
+        # Retain files on rollback; capture ownership before cascading documents.
+        file_names = [job.file_path, *_paper_artifact_names(job, user.tenant_id)]
         await service.delete(job_id)
         await db.commit()
+
+        for stored_name in file_names:
+            try:
+                file_path = await resolve_upload_path(stored_name, upload_dir=UPLOAD_DIR)
+                await asyncio.to_thread(file_path.unlink, missing_ok=True)
+            except OSError:
+                logger.warning("job_file_cleanup_unavailable", job_id=job_id)
 
         return JSONResponse(content={"detail": "Job deleted"})
 
@@ -362,7 +427,7 @@ async def retry_job(
 
         # Re-enqueue
         queue = get_ingestion_queue()
-        await queue.queue.put(job_id)
+        await queue.requeue(job_id)
         logger.info(f"Retried job {job_id}")
 
         return JSONResponse(content={
@@ -393,9 +458,10 @@ async def serve_job_file(
         if not job:
             raise HTTPException(status_code=404, detail="Job not found")
 
-        file_path = Path(job.file_path)
-        if not file_path.exists():
-            raise HTTPException(status_code=404, detail="File not found on disk")
+        try:
+            file_path = await resolve_upload_path(job.file_path, upload_dir=UPLOAD_DIR)
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="File not found on disk") from None
 
         original_filename = job.meta.get("original_filename", file_path.name) if job.meta else file_path.name
         # No `filename` arg — avoids Content-Disposition: attachment so browsers render inline
@@ -428,9 +494,10 @@ async def preview_job_file(
         if not job:
             raise HTTPException(status_code=404, detail="Job not found")
 
-        file_path = Path(job.file_path)
-        if not file_path.exists():
-            raise HTTPException(status_code=404, detail="File not found on disk")
+        try:
+            file_path = await resolve_upload_path(job.file_path, upload_dir=UPLOAD_DIR)
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="File not found on disk") from None
 
         ext = file_path.suffix.lower()
         if ext not in {".docx", ".pptx", ".xlsx"}:
@@ -455,15 +522,13 @@ async def preview_job_file(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/v1/jobs/{job_id}/preview/html", response_class=None)
+@app.get("/v1/jobs/{job_id}/preview/html", response_class=HTMLResponse)
 async def preview_job_file_html(
     job_id: str,
     db=Depends(get_db),
     user: UserContext = Depends(get_user_context),
 ):
     """Return an HTML document for browser-native Office file preview (DOCX, XLSX, PPTX)."""
-    from fastapi.responses import HTMLResponse
-
     service = IngestionService(db)
     try:
         job = await service.get_by_id(
@@ -472,9 +537,10 @@ async def preview_job_file_html(
         if not job:
             raise HTTPException(status_code=404, detail="Job not found")
 
-        file_path = Path(job.file_path)
-        if not file_path.exists():
-            raise HTTPException(status_code=404, detail="File not found on disk")
+        try:
+            file_path = await resolve_upload_path(job.file_path, upload_dir=UPLOAD_DIR)
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="File not found on disk") from None
 
         ext = file_path.suffix.lower()
         if ext not in {".docx", ".pptx", ".xlsx"}:

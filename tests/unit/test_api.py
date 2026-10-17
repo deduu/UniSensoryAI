@@ -11,8 +11,11 @@ Covers ALL endpoints:
 """
 
 import sys
+from pathlib import Path
+from typing import Any, Awaitable, Callable
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from fastapi import FastAPI
 import pytest
 from datetime import datetime, timezone
 from contextlib import asynccontextmanager
@@ -37,6 +40,29 @@ from src.db.models.ingestion import IngestionStatus  # noqa: E402
 from src.policy.models import PolicyReviewResult  # noqa: E402
 
 
+def test_openapi_schema_includes_paper_routes_and_html_preview(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Swagger includes business review routes and advertises the HTML preview."""
+    from src.api.server import app
+
+    monkeypatch.setattr(app, "openapi_schema", None)
+    schema = app.openapi()
+    paths = schema["paths"]
+    assert "/v1/paper/agreements" in paths
+    assert "get" in paths["/v1/paper/agreements"]
+    assert "/v1/paper/review-context" in paths
+    assert "/v1/paper/agreements/{agreement_id}/versions/{version_number}/approval" in paths
+    assert "/v1/paper/cases" in paths
+    assert "/v1/paper/cases/{case_id}/versions/{version_number}/decision" in paths
+    assert "post" in paths["/v1/paper/extractions"]
+    assert "get" in paths["/v1/paper/extractions"]
+    assert "get" in paths["/v1/paper/extractions/{job_id}"]
+    assert "get" in paths["/v1/paper/extractions/{job_id}/file"]
+    response = paths["/v1/jobs/{job_id}/preview/html"]["get"]["responses"]["200"]
+    assert "text/html" in response["content"]
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize("owned", [True, False])
 async def test_extraction_lifespan_retains_host_resource_ownership(
@@ -52,7 +78,7 @@ async def test_extraction_lifespan_retains_host_resource_ownership(
     queue = AsyncMock()
     monkeypatch.setattr(server, "init_db", lambda url: None)
     monkeypatch.setattr(server.db_session, "session_manager", None)
-    monkeypatch.setattr(server, "init_ingestion_queue", lambda processor: queue)
+    monkeypatch.setattr(server, "init_ingestion_queue", lambda processor, **kwargs: queue)
     async with server.lifespan(application):
         pass
     queue.stop_worker.assert_awaited_once()
@@ -75,7 +101,7 @@ async def test_extraction_lifespan_cleans_up_when_application_raises(
     application.state.extraction_service_owned = True
     monkeypatch.setattr(server, "init_db", lambda url: None)
     monkeypatch.setattr(server.db_session, "session_manager", None)
-    monkeypatch.setattr(server, "init_ingestion_queue", lambda processor: queue)
+    monkeypatch.setattr(server, "init_ingestion_queue", lambda processor, **kwargs: queue)
     with pytest.raises(RuntimeError, match="application failure"):
         async with server.lifespan(application):
             raise RuntimeError("application failure")
@@ -83,9 +109,149 @@ async def test_extraction_lifespan_cleans_up_when_application_raises(
     service.aclose.assert_awaited_once()
 
 
+@pytest.mark.asyncio
+async def test_lifespan_registers_paper_workflow_and_reuses_application_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Queued extraction resolves the same app runtime lazily, without startup inference."""
+    from src.api import server
+
+    application = FastAPI()
+    service, queue = AsyncMock(), AsyncMock()
+    captured: dict[str, Any] = {}
+
+    class Processor:
+        def __init__(self, service_factory: Callable[[], Awaitable[Any]], **kwargs: Any) -> None:
+            captured["factory"] = service_factory
+            captured.update(kwargs)
+
+        async def process(self, file_path: str, metadata: dict[str, Any]) -> dict[str, Any]:
+            return {}
+
+    def queue_factory(processor: Any, **kwargs: Any) -> AsyncMock:
+        captured.update(kwargs)
+        return queue
+
+    factory = AsyncMock(return_value=service)
+    monkeypatch.setenv("EXTRACTION_WORKFLOW_TIMEOUT_SECONDS", "540")
+    monkeypatch.setattr(server, "init_db", lambda url: None)
+    monkeypatch.setattr(server.db_session, "session_manager", None)
+    monkeypatch.setattr(server, "init_ingestion_queue", queue_factory)
+    monkeypatch.setattr(server, "PaperExtractionProcessor", Processor, raising=False)
+    monkeypatch.setattr(server, "get_extraction_service", factory, raising=False)
+    async with server.lifespan(application):
+        factory.assert_not_awaited()
+        assert captured["options"].timeout_seconds == 540
+        assert callable(captured["workflow_handlers"]["paper_extraction"])
+        assert await captured["factory"]() is service
+        assert factory.call_args.args[0].app is application
+    queue.stop_worker.assert_awaited_once()
+
+
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("backend", ["memory", "redis"])
+async def test_startup_recovery_respects_durable_queue(
+    monkeypatch: pytest.MonkeyPatch, backend: str
+) -> None:
+    """Starting an API must not fail jobs retained by a Redis worker queue."""
+    from src.api import server
+
+    manager, session, service, queue = MagicMock(), AsyncMock(), MagicMock(), AsyncMock()
+    manager.session.return_value.__aenter__.return_value = session
+    service.fail_interrupted_jobs = AsyncMock(return_value=0)
+    monkeypatch.setenv("QUEUE_BACKEND", backend)
+    monkeypatch.setattr(server, "init_db", lambda url: None)
+    monkeypatch.setattr(server.db_session, "session_manager", manager)
+    monkeypatch.setattr(server, "IngestionService", lambda db: service)
+    monkeypatch.setattr(server, "init_ingestion_queue", lambda processor, **kwargs: queue)
+    async with server.lifespan(FastAPI()):
+        pass
+    assert service.fail_interrupted_jobs.await_count == (1 if backend == "memory" else 0)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("endpoint", ["/v1/jobs", "/v1/jobs/private-job"])
+async def test_job_history_never_serializes_provider_credentials(
+    test_app: FastAPI, endpoint: str
+) -> None:
+    """Workers retain credentials, while history only receives safe metadata."""
+    metadata = {
+        "model_id": "generic-model",
+        "api_keys": {"cloud": "private-sentinel"},
+        "api_key": "private-single-sentinel",
+        "original_filename": "invoice.pdf",
+    }
+    job = _make_mock_job(job_id="private-job", meta=metadata)
+    service = MagicMock()
+    service.list_jobs = AsyncMock(return_value=[job])
+    service.get_by_id = AsyncMock(return_value=job)
+    with patch("src.api.server.IngestionService", return_value=service):
+        async with AsyncClient(
+            transport=ASGITransport(app=test_app), base_url="http://test"
+        ) as client:
+            response = await client.get(endpoint)
+    assert response.status_code == 200
+    data = response.json()[0] if endpoint == "/v1/jobs" else response.json()
+    assert data["meta"] == {"model_id": "generic-model", "original_filename": "invoice.pdf"}
+    assert "private-sentinel" not in response.text
+    assert job.meta == metadata
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("commit_fails", [False, True])
+async def test_delete_paper_job_cleans_owned_artifact_only_after_commit(
+    test_app: FastAPI, tmp_path: Path, commit_fails: bool
+) -> None:
+    """Database rollback preserves files, and typed tenant ownership limits cleanup."""
+    import uuid
+    from src.api import server
+
+    source = tmp_path / "source.pdf"
+    owned = tmp_path / f"{uuid.uuid4()}.paper-extraction.json"
+    foreign = tmp_path / f"{uuid.uuid4()}.paper-extraction.json"
+    unrelated = tmp_path / "unrelated.json"
+    for path in (source, owned, foreign, unrelated):
+        path.write_text("test-only")
+    doc, other_doc = _make_mock_doc(), _make_mock_doc()
+    doc.tenant_id, other_doc.tenant_id = "default", "other"
+    doc.content_chunks = [
+        {"type": "paper_extraction_artifact", "version": "1", "artifact_name": owned.name},
+        {"type": "paper_extraction_artifact", "version": "1", "artifact_name": unrelated.name},
+        {"type": "paper_extraction_artifact", "version": "1", "artifact_name": "../outside.json"},
+    ]
+    other_doc.content_chunks = [
+        {"type": "paper_extraction_artifact", "version": "1", "artifact_name": foreign.name}
+    ]
+    job = _make_mock_job(file_path=str(source), documents=[doc, other_doc])
+    service, session = MagicMock(), AsyncMock()
+    service.get_by_id = AsyncMock(return_value=job)
+    service.delete = AsyncMock()
+    if commit_fails:
+        session.commit.side_effect = RuntimeError("test database unavailable")
+
+    async def database() -> AsyncMock:
+        return session
+
+    server.app.dependency_overrides[get_db] = database
+    with (
+        patch.object(server, "IngestionService", return_value=service),
+        patch.object(server, "UPLOAD_DIR", tmp_path),
+    ):
+        async with AsyncClient(
+            transport=ASGITransport(app=test_app), base_url="http://test"
+        ) as client:
+            response = await client.delete("/v1/jobs/test-job-id")
+    assert response.status_code == (500 if commit_fails else 200)
+    assert source.exists() is commit_fails
+    assert owned.exists() is commit_fails
+    assert foreign.exists()
+    assert unrelated.exists()
+
 
 @pytest.fixture
 def mock_lifespan():
@@ -264,8 +430,9 @@ async def test_process_document_upload_queue_error(test_app, tmp_path):
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-async def test_preview_job_file_as_text_for_docx(test_app):
+async def test_preview_job_file_as_text_for_docx(test_app, tmp_path):
     """Office source preview should return extracted text instead of forcing inline DOCX."""
+    (tmp_path / "proposed-policy.docx").write_bytes(b"document source")
     mock_job = _make_mock_job(
         job_id="job-docx",
         file_path="/uploads/proposed-policy.docx",
@@ -277,7 +444,7 @@ async def test_preview_job_file_as_text_for_docx(test_app):
     with (
         patch("src.api.server.IngestionService", return_value=mock_service),
         patch("src.api.server.DocumentConverter.convert", return_value=["Full policy text"]),
-        patch("src.api.server.Path.exists", return_value=True),
+        patch("src.api.server.UPLOAD_DIR", tmp_path),
     ):
         transport = ASGITransport(app=test_app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -289,6 +456,59 @@ async def test_preview_job_file_as_text_for_docx(test_app):
         "content_type": "text/plain",
         "content": "Full policy text",
     }
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("suffix", ["file", "preview", "preview/html"])
+async def test_existing_windows_upload_remains_accessible(
+    test_app: FastAPI, tmp_path: Path, suffix: str
+) -> None:
+    """Mounted uploads remain downloadable and previewable after a Docker switch."""
+    upload = tmp_path / "retained.docx"
+    upload.write_bytes(b"retained document")
+    job = _make_mock_job(
+        file_path=r"C:\old-workspace\data\uploads\retained.docx",
+        meta={"original_filename": "retained.docx"},
+    )
+    service = MagicMock()
+    service.get_by_id = AsyncMock(return_value=job)
+    with (
+        patch("src.api.server.IngestionService", return_value=service),
+        patch("src.api.server.UPLOAD_DIR", tmp_path),
+        patch("src.api.server.DocumentConverter.convert", return_value=["retained preview"]),
+        patch("src.api.server.DocumentConverter.to_html", return_value="<p>retained preview</p>"),
+    ):
+        transport = ASGITransport(app=test_app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.get(f"/v1/jobs/retained-job/{suffix}")
+    assert response.status_code == 200
+    if suffix == "file":
+        assert response.content == b"retained document"
+    elif suffix == "preview":
+        assert response.json()["content"] == "retained preview"
+    else:
+        assert response.text == "<p>retained preview</p>"
+
+
+@pytest.mark.asyncio
+async def test_delete_existing_windows_upload_uses_mounted_copy(
+    test_app: FastAPI, tmp_path: Path
+) -> None:
+    upload = tmp_path / "retained.pdf"
+    upload.write_bytes(b"retained document")
+    job = _make_mock_job(file_path=r"C:\old-workspace\data\uploads\retained.pdf")
+    service = MagicMock()
+    service.get_by_id = AsyncMock(return_value=job)
+    service.delete = AsyncMock()
+    with (
+        patch("src.api.server.IngestionService", return_value=service),
+        patch("src.api.server.UPLOAD_DIR", tmp_path),
+    ):
+        transport = ASGITransport(app=test_app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.delete("/v1/jobs/retained-job")
+    assert response.status_code == 200
+    assert not upload.exists()
 
 
 @pytest.mark.asyncio
@@ -458,7 +678,10 @@ async def test_delete_job_success(test_app, tmp_path):
     from src.api.server import app
     app.dependency_overrides[get_db] = override_get_db
 
-    with patch("src.api.server.IngestionService", return_value=mock_service):
+    with (
+        patch("src.api.server.IngestionService", return_value=mock_service),
+        patch("src.api.server.UPLOAD_DIR", tmp_path),
+    ):
         transport = ASGITransport(app=test_app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             response = await client.delete("/v1/jobs/del-job")
@@ -526,8 +749,7 @@ async def test_retry_failed_job(test_app):
     mock_service.update_status = AsyncMock()
 
     mock_queue = MagicMock()
-    mock_queue.queue = MagicMock()
-    mock_queue.queue.put = AsyncMock()
+    mock_queue.requeue = AsyncMock()
 
     mock_session = AsyncMock()
 
@@ -553,7 +775,7 @@ async def test_retry_failed_job(test_app):
 
     # Should have updated status and re-enqueued
     mock_service.update_status.assert_called_once()
-    mock_queue.queue.put.assert_called_once_with("retry-job")
+    mock_queue.requeue.assert_awaited_once_with("retry-job")
 
 
 @pytest.mark.asyncio
