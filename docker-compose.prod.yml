@@ -2,7 +2,7 @@
 #
 #   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 #
-# The dev compose file exposes Postgres on 5434 and Redis on 6379 to the
+# The dev compose file exposes Postgres on 5434 and the API/web ports to the
 # host. This overlay removes those public bindings (services talk to
 # each other over the internal docker network), adds a Caddy reverse
 # proxy that terminates TLS, and runs the FastAPI image built from
@@ -12,19 +12,26 @@ services:
   db:
     # Production: only the app container should reach Postgres.
     # Override the dev `ports:` to drop the host binding.
-    ports: []
+    ports: !reset []
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
 
   redis:
-    ports: []
+    ports: !reset []
+
+  # The production SPA is deployed separately to Cloudflare Pages.
+  web:
+    profiles: [development-web]
 
   api:
     build:
       context: .
       dockerfile: Dockerfile
+      target: runtime
+      args:
+        INSTALL_LOCAL_VLM: "false"
     restart: always
     depends_on:
       db:
@@ -39,7 +46,9 @@ services:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       REDIS_URL: redis://redis:6379/0
       UPLOADS_DIR: /app/data/uploads
-    volumes:
+      OAUTH_REDIRECT_BASE_URL: ${OAUTH_REDIRECT_BASE_URL:-}
+    ports: !reset []
+    volumes: !override
       - uploads:/app/data/uploads
     expose:
       - "8010"

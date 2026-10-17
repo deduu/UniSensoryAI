@@ -1,0 +1,39 @@
+# Deployment-owned model bindings. The reusable library stays native-only by default.
+# Set EXTRACTION_CONFIG_PATH=/app/configs/extraction.yaml in the application deployment.
+# Point to any supported OpenAI-compatible endpoint; no model or vendor is hardcoded.
+# Required environment variables: EXTRACTION_BASE_URL, EXTRACTION_MODEL, EXTRACTION_API_KEY.
+# The base URL ends at the API version prefix (for example /v1), not /chat/completions.
+settings:
+  field_attempts: 2
+  field_review_batch_size: 1
+  field_review_schema_ids: [paper.rent_agreement]
+  field_review_max_batches: 32
+  field_review_max_source_blocks: 16
+  field_review_max_source_chunks: 16
+  max_output_tokens: 8192
+  calls_per_second: 10
+  inference_timeout_seconds: 60
+
+profiles:
+  vision:
+    provider: openai_compatible
+    connect_retries: 2
+    model_id: ${EXTRACTION_MODEL}
+    base_url: ${EXTRACTION_BASE_URL}
+    api_key_env: EXTRACTION_API_KEY
+    supports_images: true
+    supports_native_json: false
+    max_input_chars: 180000
+    max_images: 1
+    concurrency: 1
+  fields:
+    provider: openai_compatible
+    connect_retries: 2
+    model_id: ${EXTRACTION_MODEL}
+    base_url: ${EXTRACTION_BASE_URL}
+    api_key_env: EXTRACTION_API_KEY
+    supports_images: false
+    supports_native_json: false
+    max_input_chars: 180000
+    max_images: 0
+    concurrency: 1
