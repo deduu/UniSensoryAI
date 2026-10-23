@@ -1,5 +1,55 @@
 # UniSensoryAI — Lessons Learned
 
+### Preserve evidence while generalizing private review notes
+**Date:** 2026-10-23
+**Context:** Checkpoint publication review found private source details in newly accumulated walkthrough notes. A broad paragraph replacement also removed an original UI warning count that was unavailable afterward.
+**Rule:** Keep an exact local before-image, match complete replacement anchors and suffixes, and compare every retained count and validation statement before saving. Generalize private names, locations, identifiers and amounts without changing technical findings or acceptance limits. If evidence cannot be recovered, omit the unsupported number and retain only verified wording.
+
+### Verify checkpoint types against locked dependencies
+**Date:** 2026-10-23
+**Context:** Unpinned verification tools selected a newer SQLAlchemy API than the application lockfile and produced unrelated generic-type errors. The locked mypy version also exposed missing annotations in new metadata, scalar validation and selected-version code.
+**Rule:** Use the lockfile's tool and runtime versions for checkpoint checks. Annotate validation adapters and deserialized values, and pass already-validated contract fields into typed constructors. Treat the installed Alembic distribution as third-party in migration integration checks when the local migration directory confuses import classification.
+
+### Include new regression modules in checkpoint lint checks
+**Date:** 2026-10-23
+**Context:** Checkpoint lint found a new source-lookup test importing AsyncIterator from typing despite the repository's collections.abc convention.
+**Rule:** Include new test files as well as application modules in scoped lint checks, and import runtime collection protocols from collections.abc when supported by the minimum Python version.
+
+### Complete source tax components without inventing accounting authority
+**Date:** 2026-10-23
+**Context:** The invoice retained its printed PPh deduction only as a legacy signed tax amount, leaving the typed withholding component empty. Recording the supported component exposed missing VAT, withholding evidence and approved rate/rounding policy. The contract stated the whole lease and installment payment dates but no per-installment coverage dates.
+**Rule:** Record each explicitly printed component with page evidence and preserve printed monetary values. Reassess honestly even when accurate completion adds findings. Never infer zero VAT, rounding, approved tax policy or installment service coverage from omitted text, percentage labels, payment dates or the full lease term. Preserve originals and immutable history and reconfirm associations after source corrections.
+
+### Separate visible value equality from reconciliation authority
+**Date:** 2026-10-23
+**Context:** A saved invoice with missing service dates had no assessed agreement reference. The comparison gave every row the same coverage warning, hiding equal currency/account values and more specific saved findings. Linked IDs also looked like extracted identifiers under generic Vendor/Store labels.
+**Rule:** Show simple literal value comparison separately from the saved assessment and preserve blocking findings ahead of unavailable-authority fallbacks. Label assigned IDs explicitly, never substitute them for missing source fields, and leave amount, tax and coverage calculations to the engine. Clone nested test fixtures before introducing mutation-based scenarios so one regression cannot contaminate later tests.
+
+### Preserve inherited policy semantics in settings editors
+**Date:** 2026-10-20
+**Context:** A field requirement editor initially serialized every effective field as an explicit override. The engine gives explicit required tax fields additional document-presence meaning, so an unrelated invoice edit could require a tax document or disable an approved substitution.
+**Rule:** Keep inherited defaults distinct from saved overrides across the catalog, editor and update contract. Verify read-edit-save behavior against the actual readiness and reconciliation engines, including optional document roles and approved substitution paths; equal displayed labels do not guarantee equal policy behavior.
+
+### Keep failed new validation distinct from legacy data
+**Date:** 2026-10-17
+**Context:** A role-policy load failure initially retained new agreement fields without party metadata, allowing them to resemble historical versions exempt from new review requirements. A focused worker regression exposed this path.
+**Rule:** Stamp unresolved metadata and safe diagnostics on new validation failures; preserve the exemption only for genuine historical snapshots. Test configuration failure, cancellation and later metadata removal. Keep source-reviewed corrections separate from unchanged automatic output, and never cite protocol constants as document facts.
+
+### Validate legal party roles across the complete representation chain
+**Date:** 2026-10-17
+**Context:** The current agreement extraction selects the tenant as `vendor_name` and cites a literal tenant-representation clause. The schema already defines vendor as landlord, but structural and quote-occurrence validation still accept that wrong role. The landlord name, representative and role definition span different PDF pages. Raw OCR Markdown also appears literally in the review UI.
+**Rule:** Extract principals, representatives and explicit roles separately, retaining all role-defining page citations before mapping a supplier name. Treat source located, role verified and reviewer confirmed as separate states. A generic same-model recheck or citation repair does not establish semantic accuracy. Preserve raw text and evidence; improve their reading presentation without rewriting source strings. Correct approved data through a new reviewed version and test multipage roles, swapped party order and an exactly cited wrong party.
+
+### Keep reviewed contract association separate from source extraction
+**Date:** 2026-10-17
+**Context:** The old identity shortcut copied master IDs into document fields, making reviewer-assigned routing values look source-derived. Initial association integration also discarded the inspected schedule when an invoice edit correctly invalidated confirmation.
+**Rule:** Preserve extracted fields and evidence when assigning canonical IDs. Bind confirmation to the exact approved version and source/allocation content, stamp provenance on the server, and reject stale bindings. Invalidate confirmation after edits while retaining a clearly labelled candidate preview so the reviewer can finish installment/allocation work. Omit absent new fields from historical fingerprints and verify legacy approval behavior.
+
+### Keep comparison expectations within the server's supported billing path
+**Date:** 2026-10-17
+**Context:** Review found that an invoice with a missing installment selection could show annual fixed rent as its expected cash amount, although the backend deliberately delegates all scheduled pricing to the installment rule.
+**Rule:** Show the selected approved installment or an unknown expectation; never substitute another pricing basis. Bind presentation to the exact approved version, retain saved findings, and distinguish no reported finding from a positive evaluated check. Cover absent and invalid selections before marking a comparison complete.
+
 ### Preserve repository line endings when staging partial changes
 **Date:** 2026-10-17
 **Context:** A generated cached Git patch failed on Windows because subprocess text input converted LF to CRLF before Git compared it with the index.
@@ -276,9 +326,85 @@ user navigated away because no durable field stored the review output.
 **Rule:** Any user-triggered analysis that appears as a reusable document result must be persisted
 before returning the API response, and job/document serializers must expose that saved result.
 
+### Use ripgrep filters for portable file selection
+**Date:** 2026-10-17
+**Context:** A deployment audit passed `tests/unit/test*` as a path to ripgrep under PowerShell; the literal wildcard was rejected before any search ran.
+**Rule:** Pass existing directory roots to `rg` and use `-g` for filename patterns. Verify the corrected search succeeds before treating an empty result as evidence that a capability is absent. When counting optional arrays in PowerShell configuration checks, filter null entries before using `@(...).Count` so an absent property is not reported as one item.
+
+### Verify permissions and audience behavior for authenticated demos
+**Date:** 2026-10-17
+**Context:** Deployment inspection showed that successful OAuth login creates a personal tenant with a `member` role, while PAPER decisions require an allowed persisted role. Official Google documentation also exempts basic identity scopes from the testing-mode test-user restriction.
+**Rule:** Check business permissions and tenant ownership after login before declaring a full demo ready. Assign only the intended reviewer's required role and prepare documents in the presenting account. Verify provider audience restrictions for the exact scopes; do not assume login or OAuth testing mode creates an email allowlist.
+
+### Check current certificate capabilities before requiring a domain
+**Date:** 2026-10-17
+**Context:** The initial public HTTPS guide assumed domain ownership and OAuth. The user wanted a shared temporary demo; current Let’s Encrypt IP certificates and an authenticated same-origin gateway remove those setup steps.
+**Rule:** Confirm the user's desired audience and login model before adding hosting dependencies. Check current CA/client support for trusted public-IP certificates, require automatic renewal, and guard both frontend and API when using a shared application context. Do not equate disabled application OAuth with an unprotected public gateway.
+
+### Keep provider endpoint settings visible in deployment examples
+**Date:** 2026-10-17
+**Context:** The demo guide mentioned `OPENAI_API_BASE` only in prose while its copyable environment block pinned PAPER to the official endpoint. This obscured the existing custom-provider setting and its extraction override.
+**Rule:** Include both chat and extraction endpoint variables in full-app examples. Explain fallback precedence and preserve the user's tested provider URL; label official endpoints as examples rather than silently replacing custom configuration.
+
+### Separate retained diagnostics from current review requirements
+**Date:** 2026-10-17
+**Context:** Agreement v5 carried 49 extraction diagnostics even after citation repairs and a party correction. The UI presented all 49 as current warnings; all 23 rejected-citation paths had traceable current evidence, while several narrative summaries still changed operative conditions.
+**Rule:** Preserve the original diagnostic log and compute current presentation separately. Recheck exact field/document/source text before labelling a rejected citation historical; keep semantic, incomplete-field and unknown issues active. Do not equate a matching quote with a correct value or complete clause. Reopen citation review after edits and label extraction list counts as retained log entries. Retain explicit approval acknowledgements and never rewrite historical versions to improve a count.
+
 ### Do not reuse preview serializers for document result state
 **Date:** 2026-05-08
 **Context:** `GET /v1/jobs` truncated `content_text` to 500 characters for list previews, but the
 frontend reused that job payload as the source of truth for extracted document content.
 **Rule:** Keep previews in dedicated fields or UI-only derivations. API fields named like persisted
 results (`content_text`) must carry the full durable value.
+
+### Project private historical metadata into strict public contracts
+**Date:** 2026-10-17
+**Context:** Adding typed extraction provenance caused history reads to reject older private `document_reuse.purpose` annotations, producing a list failure despite valid source identity and SHA256.
+**Rule:** Test stored legacy metadata before exposing a new strict response contract. Whitelist the public projection at the read boundary, validate all required public values, retain strict direct inputs, and leave persisted history untouched. Compare refreshed database timestamps when SQLite normalizes timezone representation.
+
+## Extraction usage accounting — 2026-10-17
+
+- Capture usage at the model boundary before output validation; rejected, truncated and refused responses can still consume tokens. Include OCR, selection, review, repair and retry calls in one async-context-scoped ledger, never a shared current-job variable.
+- Keep unknown counters and missing prices explicit. Preserve immutable per-call counters and decimal pricing snapshots; do not reconstruct historical tokens from characters or label a public-price estimate as the actual provider bill.
+- Bind prices to the configured model and the reported response model. Deployment aliases require explicit approved response-model aliases; an unrecognized returned model must remain unpriced. Compatibility adapters must retain actual model identity and nested cached-token counters too.
+- Carry the typed ledger through artifact/document persistence errors, graceful cancellation, worker recovery and retry backoff. Persist before a delay; a repeated attempt of the same job must resume prior counters rather than overwrite them. Abrupt process/storage loss cannot be represented as complete metering without a durable event sink.
+- On this Windows host, the sandboxed asyncio runner can stall. Use the approved host Python runner for isolated mocked tests, and point cached mypy at that Python executable so installed application dependencies are resolved.
+
+### Clause fidelity and source selection
+- Narrative paraphrases can change the legal actor, AND/OR alternatives, prerequisites, notice triggers, or remedies while retaining literal but insufficient citations. Opt annotated narrative fields into exact source-paragraph selection, inspect adjacent paragraphs and continuation pages, and keep human semantic coverage review open; copied text establishes fidelity, not completeness or legal interpretation.
+- Confirm apparent OCR/name spelling differences with a magnified crop of the original PDF before proposing a correction. A low-resolution visual reading is not enough to override a retained literal quote; preserve the quote and record any real visual correction separately.
+### Make document review readable and keep policy provenance honest
+**Date:** 2026-10-18
+**Context:** All-fields agreement review exposed long disabled editors and JSON, while approval labels implied that reviewer-entered policy references selected executable rules.
+**Rule:** Render saved terms as semantic values with full clauses and nested source links. Keep the PDF, current field value and retained quote accessible together; use bounded desktop panes and section navigation. Native clause edits must retain exact strings, ordering and null/empty distinctions, and pending advanced JSON must block competing edits and submission. Keep required policy references explicit, explain whether they are verified against a catalog, and never fill them from unrelated invoice matching configuration. Verify compact behavior after responsive transitions settle and reset viewport overrides.
+
+### Format money without changing its meaning or interrupting selection
+**Date:** 2026-10-18
+**Context:** Monetary inputs and nested schedules exposed raw digits. Live verification caught a focus-time value rewrite racing select-all/paste; component tests also caught a native validity message persisting after a synchronous parent update.
+**Rule:** Format exact decimal strings by explicit schema semantics and the owning document/schedule currency, never by numeric-looking text or floating-point conversion. Preserve fractional scale, unknown values, raw JSON, rates, IDs and original quotations. Keep focus and typing from rewriting the display; format on blur, validate locale grouping strictly and retain invalid local text without applying it. Reconcile native custom validity after each render, and keep guidance separate from stable accessible input names. Test grouped replacement, values above the safe-integer range, currency changes and invalid-input submission gates in the actual UI; cancel local verification drafts.
+
+### Keep assigned identity, source extraction and billing authority distinct
+**Date:** 2026-10-18
+**Context:** The real agreement could not publish because source store_id was null although its validated master identity had a store ID. Missing invoice coverage then hid the confirmed contract from comparison entirely. Verbose diagnostics also obscured which fields were actually absent.
+**Rule:** Check required assigned identifiers at the canonical identity boundary; reject contradictory source identifiers without filling absent source values. Missing extracted IDs do not mean the master assignment is missing. A server-confirmed selected approved contract may locate reference values and PDFs while billing coverage is unknown, but must never establish assessed authority, a clean match or payment eligibility. Preserve authority-reference precedence and exact version/tenant/identity checks. Present unresolved diagnostics by field with concise reason/action, separate missing from present-but-unverified values, and retain exact messages and source pages under Details. Historical diagnostics are not a list of certified successful extractions.
+
+### Preserve UTF-8 when editing on Windows
+**Date:** 2026-10-18
+**Context:** Piping a Python edit script through PowerShell changed a Unicode separator to an invalid byte, and newline translation introduced CRCRLF.
+**Rule:** Prefer apply_patch for Unicode source edits. For scripted edits, keep command source ASCII, read/write explicit UTF-8 and set newline='\n'; verify decoding and git diff --check before UI/build verification.
+
+### Preserve intent, local work and exact saved versions across workspace navigation
+**Date:** 2026-10-18
+**Context:** Combining source review, agreement review and reconciliation introduced competing deferred navigation requests. Effect cleanup could invalidate an already-consumed request during StrictMode replay and leave a loading state stuck.
+**Rule:** Keep editors mounted across view changes and reset them only at account/backend boundaries. Use a shared monotonic intent sequence for saved-record and extraction handoffs, invalidate pending source navigation on newer navigation, and require keep/replace before discarding local work. Resolve exact requested versions independently from latest-history eligibility; never substitute the latest version after an exact lookup fails. Cleanup should guard unmounted updates without invalidating the sole consumed request unless it will be restarted. Verify imports with the production bundle as well as component tests; server rendering alone may not expose a missing ESM export.
+
+### Unknown legacy source identity does not mean no saved workflow
+**Date:** 2026-10-18
+**Context:** Completed older extraction jobs lacked meta.document_id even though their retained artifacts and saved cases used the same canonical source. A new document index therefore initially missed their saved workflow links.
+**Rule:** Distinguish unresolved source indexing from a verified absence of saved records. Repair only validated, tenant-owned bounded artifacts with a dry-run first, add the canonical source ID without rewriting source data or chronology, and compare complete saved-history fingerprints afterward. Preserve archived attempts and explicitly choose among multiple source-linked masters instead of guessing by filename or taking the first match.
+
+### Separate saved source review, case selection and reconciliation readiness
+**Date:** 2026-10-18
+**Context:** Invoice review exposed Reconcile package before users had saved/reviewed individual documents or chosen the sources belonging to a case.
+**Rule:** Save incomplete source drafts independently of master assignment and assessment. Append immutable reviewed versions with server-stamped reviewer/time; corrections require fresh review. Resolve exact tenant-owned reviewed snapshots when assembling a case, reject duplicate source IDs even under different draft IDs, and never trust caller-written review provenance on manual imports. Check readiness without writing history, then recheck current authority on explicit reconciliation in the host transaction. Requirement labels must describe actual engine guards: optional presence never certifies a skipped accounting check or waives coverage, installments, withholding or AP authorization. Keep duplicate diagnostics in history while presenting one actionable prerequisite. Async attachment lookup must merge into the current contract/allocation package rather than an older closure.

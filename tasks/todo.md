@@ -1,3 +1,26 @@
+## Publish PAPER development checkpoint — 2026-10-23
+
+- [x] Review current instructions, lessons, accumulated changes and remote history.
+- [x] Audit publication safety and choose focused commit boundaries.
+- [x] Run backend, frontend, migration, dependency and deployment checks; resolve checkpoint blockers.
+- [x] Create and inspect focused commits without including private runtime artifacts.
+- [x] Push the implementation checkpoint and verify remote HEAD; check the final documentation push before reporting completion.
+
+### Plan and scope
+
+Publish work accumulated since `50f518f` on `codex/reusable-pdf-extraction`. Review backend and publication safety in parallel, preserve existing source/data ownership and keep ignored credentials, uploads/results and backups local. Verify the complete test suite and frontend build, with scoped lint/type and deployment checks. Do not deploy infrastructure, apply migrations, run model inference or modify business records. Plan mode and TodoWrite are unavailable; this checklist and the initial commentary serve as the planning check-in. The user authorized creating and pushing the checkpoint commits and explicitly selected this previous branch after another chat created `codex/enterprise-ui-ux-audit` in the shared checkout. Preserve that chat's separate audit notes locally.
+
+### Review
+
+- Fast-forwarded the checkpoint branch to merged `origin/main` at `b739ab5`; the merge had the same file tree as the previous checkpoint, so accumulated work was preserved. Selected six commits: usage/pricing telemetry; coherent PAPER backend contracts, persistence and review workflows; verbatim source narratives; frontend workspaces; authenticated demo deployment; and documentation/results. Shared backend files remain together so each commit keeps its dependencies.
+- Publication review covered 257 candidate files and parsed all 156 changed/new Python files. No credential signatures, oversized files, private source PDFs, ignored runtime payloads or actual environment files are included. Generalized private source details in new walkthrough notes and used synthetic money examples while preserving verified results and limitations. An unavailable historical UI warning count is omitted rather than invented. Excluded the other chat's unfinished UI/UX audit plan, lesson and audit document from this checkpoint.
+- The full backend suite passed **1,249 tests**, with **13 opt-in deployment skips**, **88%** coverage and five existing mock/JWT test warnings. Separately, all **13 real Docker gateway/reviewer checks passed** using isolated temporary containers. Metadata/type cleanup passed **69 focused tests**, and final readiness/preparation cleanup passed **55 focused tests**. No live application migrations, business-record writes, AWS deployment or model inference was performed for publication.
+- All **249 frontend tests** and the production build pass. Explicit JSX/undefined-variable/hook lint reports zero errors and one existing ref-cleanup warning. Existing Browserslist age and bundle-size advisories remain; the standard npm lint command still lacks a checked-in ESLint configuration.
+- All **113 new Python files** and the edited history module pass lock-pinned Ruff, Black and scoped isort checks. Strict mypy passes for **118 scoped source files** with locked runtime dependencies; legacy API/model-export/queue/ingestion typing debt remains outside this passing scope. Added missing adapter/deserialization annotations and reused the validated selected-document role without changing workflow behavior.
+- Offline lock verification passes. Alembic reports the single head `b9040a7fe213`; isolated SQLite integration covers the new persistence and policy migration cycle. Development, production/all-profile, GPU and demo Compose overlays validate. Docker checks exercise actual Caddy authentication/header/origin controls and repeatable reviewer setup, using local test certificates; public-IP certificate issuance and AWS operation were not exercised.
+- Source-identity repair is dry-run by default. Tenant batches inspect only the first requested jobs (default 20, maximum 100) before skipping existing IDs; there is no advancing cursor. Use exact `--job-id` for records outside that window. Read-by-document retains a bounded legacy-artifact fallback; the script and UI guide document the repair limitation.
+- Implementation checkpoint `f095693` was pushed to `origin/codex/reusable-pdf-extraction` and verified directly against the remote hash. Publish this review as the final documentation commit and verify its remote hash and checkout status before reporting completion. During publication the other chat moved its audit notes and pilot to a separate managed worktree; its unfinished work is outside this checkpoint checkout.
+
 ## Publish PAPER development checkpoint — 2026-10-17
 
 - [x] Inspect repository instructions, accumulated changes and existing branch history.
@@ -810,3 +833,249 @@ Plan: [plans/in-chat-orchestration-do-elegant-anchor.md](../../.claude/plans/in-
 - Function-calling tool loop. `DirectAnswererAgent` currently surfaces `web_search` as an offered tool but doesn't actually execute returned tool calls. Add a tool-call loop in `DirectAnswererAgent.run` once we want the LLM to dispatch search itself.
 - Migrating policy review agents to use the orchestration `WebSearchTool` directly (not just the shim). Mechanical work; do it when there's a second consumer that benefits.
 - Tavily / SerpAPI providers — `SearchProvider` ABC supports them; add when needed.
+# Source-faithful clause rerun, usage and extraction cleanup — 2026-10-17
+
+- [x] Add regression tests and model-neutral clause extraction safeguards for complete actors, triggers, conditions, exceptions and page continuations.
+- [x] Record request-scoped provider token usage and configurable cost estimates, including retries and unavailable-usage states; expose review totals in the UI.
+- [x] Add recoverable extraction archiving that clears active history without breaking saved agreement/source review, with restoration and tenant-boundary tests.
+- [x] Rerun the original contract through the configured extraction service, verify known clause discrepancies against the PDF, and append a corrected unapproved draft.
+- [x] Archive previous extraction attempts after the replacement is verified; confirm earlier agreement snapshots and source access remain intact.
+- [x] Verify regression checks, live review and usage totals; document exact rerun scope, costs, remaining issues and recovery instructions.
+
+Plan checked: user authorizes rerunning the contract, a corrected review draft, clearing earlier extraction attempts and recording cost/token totals. Use a recoverable archive for the old extraction list so the simultaneously requested agreement history and PDF evidence remain accessible. No approval or invoice case mutation. Implement model-independent extraction safeguards and configurable pricing; never invent historical token totals or equate source traceability with semantic correctness. Existing async, typed, TDD rules apply. Plan-mode/TodoWrite tools are unavailable; this checklist and progress updates provide the plan and tracking.
+
+Review: the reviewed contract is saved as unapproved **v6**, with all seven known clause issues addressed in a source-reviewed draft. The all-field/model-party rerun reused the complete 38-page OCR only after SHA-256 equality against the user's original PDF. The automatic result remains unchanged: literal extraction repaired payment/termination wording but omitted later force-majeure context and shortened a representation chain. Original-page inspection restored complete fit-out, collateral, force-majeure and dismantling clauses and the complete documented representation chain in the separate draft. Its 92 citations pass literal checks. Generated installment IDs and inferred allocation periods were removed; source vendor/store IDs stay unknown while assigned identity remains unchanged. Printed annual/total/installment amounts are preserved, with their arithmetic discrepancy flagged. This checks the known defects and selected clauses, not exhaustive semantic coverage or approval of every page.
+
+V6 retains 45 deduplicated diagnostics/events: **19 current review items and 26 historical entries**. Current items comprise nine narrative confirmations, seven field decisions, party confirmation, unresolved operational allocation and the amount discrepancy. Obsolete automatic candidate indexes are explicitly retained as history events with their original diagnostic and extraction reference; the raw 42-entry automatic log is unchanged. Versions 1–5 compare exactly to the pre-run baseline, v4 remains the approved reference, and invoice cases remain unchanged. Seven earlier extraction attempts are recoverably archived; only the new attempt appears in active upload history. Original PDFs, full artifacts, private metadata and processing timestamps remain unchanged. Restore/rearchive was tested through the UI, and every archived PDF/page preview remains readable.
+
+Usage: **37/37 calls measured, 511,487 input + 8,207 output = 519,694 tokens**, zero reported cached input, a public GPT-4o reference cost estimate (actual Azure billed cost unknown). Every call and total was independently recalculated with Decimal. Earlier OCR and historical attempts have unavailable usage and are excluded. Runtime rates and usage are retained per call; reusable code has no provider/model pricing default. UI shows totals, coverage, source reuse and the call/pricing breakdown.
+
+Verification: 410 backend regression checks, 58 archive/source/queue checks, 127 frontend tests, production build, focused lint, formatting, scoped strict mypy and diff checks pass. Existing bundle-size/Browserslist advisories remain. Live UI verifies saved v6, all six versions, unchecked approval acknowledgements, 19/26 warning buckets, both PDF/source-page navigation, synchronized page changes, active-history cleanup and recovery. Private baseline, correction plan, candidate, saved draft, lineage, usage ledger/recalculation and final preservation proof are in `data/runtime/paper-real-sample/clause-correction-*`; screenshots include `clause-correction-v6-overview.png` and `clause-correction-v6-ui.png`. No extra model calls were made during manual validation, saving or cleanup.
+
+# Warning triage for agreement v5 — 2026-10-17
+
+- [x] Audit all 49 retained diagnostics against saved v5, current citations and the exact original extraction.
+- [x] Add failing tests and a model-independent, read-only assessment separating current review requirements from historical diagnostics.
+- [x] Integrate counts, filters, explanations and source shortcuts in Document Review while retaining the complete warning log and approval safeguards.
+- [x] Verify regression tests, build, live desktop/compact review, and unchanged saved versions/extraction history; document the findings.
+
+Plan checked: keep saved warnings immutable. Recheck exact document-qualified citations against stored source blocks; citation traceability does not establish semantic correctness. Unknown or unverifiable diagnostics remain in Needs review. Preserve explicit review of narratives, assigned identifiers and parties. No model rerun, new draft, approval or invoice mutation is needed.
+
+Review: v5 contains 49 unique diagnostics, not duplicate envelope copies. All 45 current citations pass literal/source-ID checks against the retained 38-page source snapshot; all 23 rejected-citation warning paths now have valid current citations. Read-only triage presents **19 needs-review items** (12 narratives, six field decisions, one party confirmation) and **30 historical entries** (23 rejected earlier citations, five candidate revisions, two correction/scope notices). Unknown, foreign, ambiguous, missing, nonliteral or non-leaf support stays unresolved. Parent/child evidence cannot retire a leaf failure; aggregate review shortcuts retain all child pages. Narrative checks remain active: PDF pages 22 and 33 visually confirm cancellation sent/received and force-majeure actor/condition distortions; further OCR-backed clause findings are documented in the private audit. Null optional fields and assigned IDs are described as review decisions, not extraction errors.
+
+UI adds Needs review / History / All filters, reasons, neutral history, current-citation page links, field-evidence actions and exact retained entries. Upload counts now say log entries. Editing a supported field reopens its citation review against the saved baseline; cancelling restores counts. Complete raw logs, all five agreement snapshots and all seven extraction artifacts compare exactly with the pre-change retained copies. V5 remains unapproved and effective approved lookup returns v4. No model call, migration or new saved version.
+
+Verification: **119 frontend tests and 51 backend approval/master tests pass**; focused lint, production build and whitespace checks pass. Existing bundle-size/Browserslist advisories remain. Live desktop (1440px) and native compact (355px) checks verify 19/30/49 counts, search, both buckets, keyboard selection, Escape/focus return, multi-page parties, historical vendor citations, unsaved edit reopening (20/29), cancel and unchecked acknowledgements, with no overflow or browser errors. Private audit, machine-readable triage, API preservation proof and screenshot are under data/runtime/paper-real-sample/warning-review-*; the testing guide and lessons are updated.
+
+# Readable review and party-role correction — 2026-10-17
+
+- [x] Add failing tests for safe formatted/raw text and readable clauses without changing source strings.
+- [x] Add additive typed party-role extraction, model-independent evidence validation and approval safeguards with regression tests.
+- [x] Integrate party role cards, evidence shortcuts and review state in agreement review while preserving legacy snapshots.
+- [x] Rerun the original contract using the configured extraction provider; save a corrected, unapproved draft with complete lineage.
+- [x] Verify source party roles, preserved history, unit/regression checks, build and live desktop/compact UI; document the result.
+
+Plan checked: reuse the existing extraction gateway and versioned agreement APIs. Keep party metadata optional within the existing extensions object to preserve historical snapshots. Source evidence and raw OCR remain immutable. A new saved draft may correct reviewed terms; no approval or invoice association will be performed.
+
+Review: implemented safe readable/raw recovered text and readable clause arrays; scalar canonical values, source characters and evidence remain unchanged. Added optional typed party metadata, a dedicated model-neutral extraction pass, configurable role/representation validation and explicit party acknowledgement. Invalid configuration/extraction produces unresolved metadata rather than accidentally taking the legacy approval path. Representative names, mappings and known capacities require citations; cycles and unsupported terminals block publication. Neither literal source support nor declared chain connectivity establishes semantic completeness. Protocol version metadata is not cited as a PDF fact.
+
+The configured model rerun created a completed history job, reusing hash-bound original OCR and explicitly retaining the other saved v4 terms. The model corrected landlord/tenant but abbreviated the tenant representation. Reviewed original PDF pages 1–3 and saved a separate source-reviewed agreement draft v5 with both representation chains, capacities and exact page-qualified citations. All non-party terms, dates, assigned IDs and stable installment IDs remain as v4. The automatic artifact is unchanged. Party validation returns only the human-review marker; other retained warnings remain visible.
+
+Saved through the expected-version API. All four earlier versions, their approval and six preceding extraction details compare exactly with the private baseline. Approved lookup still resolves v4; v5 remains unapproved. No invoice association, reconciliation or approval was performed. Private baseline/candidate/result/verification JSON remains under ignored data/runtime/paper-real-sample/.
+
+Verification: **646 backend PAPER/extraction tests and 105 frontend tests pass**. Scoped Ruff, Black/isort, strict mypy across 15 source files, focused JSX/hooks/undefined-variable lint, production build and whitespace checks pass. Existing Browserslist/bundle-size advisories remain. Live checks at 1440px and native 355px confirm formatted page-4 emphasis versus raw markers, exact saved original lookup, party/evidence shortcuts, multi-page chains, preserved temporary edits across source jumps, cancel without saving, unchecked approval acknowledgement, no overflow and no console errors. Local API restarted with no active jobs; viewport restored. Screenshot: data/runtime/paper-real-sample/party-corrected-draft-v5-ui.png. Testing guide updated.
+
+# Contract extraction readability and party audit — 2026-10-17
+
+- [x] Compare current extracted party values and the known master discrepancy with the original PDF's party definitions.
+- [x] Trace raw formatting markers through source text and canonical field rendering.
+- [x] Explain verified causes, test gaps and concrete model-independent fixes without changing approved records.
+
+Plan checked: read-only source and code audit requested by the user. Preserve approved versions and extraction history; distinguish exact citation coverage from semantic party-role correctness.
+
+Review: visually inspected PDF pages 2–6; the retained PDF is hash-identical to the user's original 38-page document. The source distinguishes the lessor and lessee through different principals and multipage representative chains. The latest automatic extraction still assigns the lessee to vendor_name and cites page 1. A read-only executable probe confirms both schema validation and literal quote occurrence accept that wrong-party value; the field has generic revised/invalid-evidence diagnostics, not a semantic role check. A separate unapproved reviewed draft already has the correct landlord; it must not be confused with the automatic result or silently replace an approved version. SourceReview renders recovered OCR Markdown as a plain string, and structured canonical arrays render as JSON disclosures. The latest scalar canonical values contain no bold markers, so presentation should target recovered text without changing evidence strings. Suggested changes: a safe formatted document reader with exact raw view, readable clause lists, explicit principals/representatives/roles with multi-page citations, a configurable semantic role-review gate and regression tests for both roles, swapped order, representatives and a literally cited tenant. No application code, extraction history, approvals or invoice cases changed during this audit.
+
+# Contract association — 2026-10-17
+
+- [x] Add deterministic, tenant-scoped approved contract suggestions with match/conflict/missing signals and bounded catalog navigation.
+- [x] Add version-bound reviewer confirmation, preserve source fields and legacy fingerprints, and reject forged/stale associations.
+- [x] Integrate candidate selection, PDF evidence shortcuts, explicit confirmation and saved association history into invoice review.
+- [x] Verify regression tests, API boundaries, production build and desktop/compact UI; document testing steps.
+
+Plan checked: extend the existing package JSON and injected master service; no model dependency or migration. Keep legacy API packages valid. Confirmation assigns canonical identity separately from source fields and remains distinct from AP approval.
+
+Review: 185 backend checks and all 89 frontend tests pass. Production build, focused ESLint, Ruff, Black formatting and isort checks pass. Verified suggestion ambiguity, tenant/effective-version authority, approved historical versions behind newer drafts, forged/stale confirmation rejection, null source-ID preservation, legacy hash stability, save/reload/correct/reconfirm and separate AP decisions using isolated test storage. Live browser checks inspect the real invoice and contract PDF shortcuts; isolated UI fixtures cover explicit confirmation, source/allocation edits clearing it, multiple source pages, unavailable sources and keyboard/modal behavior. Desktop and 355px compact layouts have no horizontal overflow. The temporary UI harness was removed. Bundled YAML policy is included in package data; no migration or example records. API was safely restarted with no active extraction jobs. Real invoice remains unsaved and unconfirmed: the reviewed agreement's master supplier differs from the invoice, with unknown invoice coverage. Screenshot: `data/runtime/contract-association-verified.png`. Testing and embedding steps are in `documentation/PAPER_UI_TESTING.md`.
+
+Type verification: strict mypy passes all 13 association source files with explicit package roots and silent dependency traversal. The external `import-untyped` diagnostic is excluded because this host Python lacks PyYAML stubs; no project-code type errors remain in that scope.
+
+# AWS demo hosting assessment — 2026-10-17
+
+## Public IP HTTPS and shared demo access
+
+Endpoint clarification: checked chat composition, cloud-model configuration and Compose interpolation after the user identified `OPENAI_API_BASE` missing from the guide's environment block. Added it to both AWS examples and explained the separate extraction URL and its override/fallback behavior. The user's `.env` is unchanged.
+
+- [x] Verify trusted IP certificates and shared gateway authentication against current upstream documentation and app permissions.
+- [x] Add an isolated demo overlay serving the frontend/API together with required password protection; preserve existing deployment modes.
+- [x] Verify gateway authentication, API routing, cross-origin write rejection and production frontend build; document setup and restart steps.
+
+Plan checked: user requested a public HTTPS demo without buying a domain or configuring Google login, with shared username/password access. Use a trusted IP certificate and a password-protected gateway on the existing EC2 host. Keep credentials configurable, protect all routes, and provision the existing shared actor explicitly for PAPER approvals. No AWS provisioning or live database changes are authorized by this local preparation.
+
+Review: added a separate base-plus-demo Compose mode, Caddy IP certificate configuration, same-origin production frontend build, full-route Basic authentication, exact-Origin write checks, and upstream credential stripping. Shared-demo UI explains browser credential lifetime, and an explicit SQL seed grants only the dedicated shared reviewer the persisted role needed for PAPER approvals. New gateway tests were first run failing before configuration existed; 13 isolated real Caddy/PostgreSQL checks now pass, including public-config adaptation and seed conflict handling. Demo Compose validation confirms private API/DB/Redis ports; production frontend build and new-test Black/Ruff checks pass. Actual EC2 launch, public ACME issuance, full live app acceptance and model quota remain user setup checks. No AWS resources, local application database or local runtime environment were changed; test containers were removed.
+
+- [x] Inspect application lifecycle, persistence, model requirements and deployment tooling.
+- [x] Verify current AWS Lambda limits/pricing and compare demo hosting options.
+- [x] Document readiness gaps, recommended architecture and AWS setup/verification steps.
+
+Plan checked: assess the current full application and a low-traffic demo using cloud model APIs. Preserve existing work; make no runtime changes or paid AWS resource changes during this assessment.
+
+Review: full-app demo scope confirmed. Current background workers, local source/artifact storage, 1,800-second extraction budget and process-scoped recovery prevent an unchanged on-demand Lambda deployment. Added `deploy/AWS_DEMO.md` with repository evidence, illustrative costs, EC2/Lightsail setup and a Lambda migration sequence. Docker daemon 29.8.2 and Compose v5.5.1 verified; `uv lock --check --offline` and production Compose validation pass (missing public domain/email reported). Existing extraction-composition/upload-storage tests: 23 passed outside the sandbox after stopping an unresponsive sandboxed run. AWS account access, a fresh container build and an actual cloud deployment remain unverified. No runtime code or AWS resources changed.
+
+## EC2 setup walkthrough follow-up
+
+- [x] Confirm public HTTPS/login access and document model, auth and frontend configuration order with domain placeholders.
+- [x] Verify EC2 cost controls and document launch, configuration, migration, demo checks and shutdown steps.
+- [x] Validate instructions against current Compose and application settings; record remaining user actions.
+
+Plan checked: the user selected EC2 and requested a guided setup, not automatic resource provisioning. Prepare settings before paid compute where possible; preserve current application work.
+
+Review: confirmed public HTTPS access with login; domain ownership/name remains to be supplied. Expanded `deploy/AWS_DEMO.md` with Singapore On-Demand pricing from AWS's public price data, retained-storage/IPv4 estimates, Standard CPU credits, OAuth callback configuration, frontend build settings, and a deliberate reviewer role assignment after first login. Verified that new OAuth accounts get personal tenants and `member` roles; the default PAPER policies allow `accountant`. Corrected the older deployment README to migrate a fresh database before starting the API. Production Compose validation, documentation whitespace checks and guide arithmetic/settings checks pass. AWS account permissions, credentials/quota, actual image build and a live deployment remain to be verified during setup. No AWS resources or application runtime settings were changed.
+
+# Reconciliation comparison workspace — 2026-10-17
+
+- [x] Inspect saved assessments, exact agreement references, evidence and UI boundaries.
+- [x] Add regression tests for exact-version authority, comparison results and document-qualified source links.
+- [x] Build a reusable comparison projection and workspace with contract/invoice PDF inspection.
+- [x] Integrate with saved invoice review without changing extraction, approvals or reconciliation rules.
+- [x] Verify unit checks, build, browser navigation and compact layout; document results.
+
+Review: frontend unit tests (79) and backend source/preview checks (43) pass; existing reconciliation/installment/case tests (110) pass. Production build and focused undefined-variable/React-hook lint checks pass. Exact-source lookups and original-page PNG previews for both existing PDFs return HTTP 200 after a safe API restart (no queued/running jobs). Desktop and compact UI checks cover two-page contract citations, invoice switching, zoom, return focus, history switching and unavailable-PDF recovery using isolated fixtures outside working queues. Compact reader uses a native modal dialog; forward/reverse Tab cycling and Escape return were verified. No browser errors, migrations or example records. Evidence screenshot: `data/runtime/reconciliation-workspace-verified.png`. Running app left on PAPER → Invoices; no saved cases currently exist, so the user will see this view after reconciling their invoice.
+
+## Legacy document reuse projection repair — 2026-10-17
+
+- [x] Reproduce history failure with retained private reuse annotations and strict public inputs.
+- [x] Whitelist public reuse provenance at the read boundary without rewriting persisted metadata.
+- [x] Verify list, detail, source lookup and existing archive regressions; record results.
+
+Plan checked: live preflight found historical `document_reuse.purpose` metadata predating the strict public contract. The parent authorized a minimal projection-only compatibility fix; no database or model writes.
+
+Review: observed the exact extra-forbidden failure before implementation; 29 archive/projection tests now pass, including list/detail/exact-source reads, unchanged stored metadata and timestamps, and strict public provenance validation. The preceding broader run passed all 29 source lookup and queued-job cases. SQLite fixture baselines are refreshed before timestamp comparisons. No application database, original PDF or extraction artifacts changed; `git diff --check` passes.
+# Integrated field review and clear approval references — 2026-10-18
+
+- [x] Inspect field, PDF and approval boundaries; preserve saved versions and validation.
+- [x] Add readable saved fields, section navigation and bounded side-by-side review with reachable editing.
+- [x] Explain accounting policy references without invented defaults or automatic classification.
+- [x] Verify frontend checks, build and desktop/compact browser review; capture results and lessons.
+
+Plan checked: presentation-only changes, model independent. Preserve canonical values, citations, draft edits, approval payloads and explicit acknowledgements. Accounting policy references remain reviewer supplied; invoice matching configuration is a separate concern.
+
+Review: saved schema and payment terms render as readable cards/hierarchies; full clauses and nested page/evidence links retain exact JSON. Draft string arrays have ordinary clause textareas and explicit null/empty operations, with advanced JSON still available and pending edits guarded. Desktop source/all-field panes have independent scrolling, a persistent toolbar and section navigation. Evidence compares the current value and retained quotation beside the source PDF. Search narrows extracted fields without changing data. Approval references have honest accounting-policy labels and catalog-limit guidance; existing payload keys, required fields and acknowledgements remain intact.
+
+Verification: all 140 frontend tests, final production build, scoped ESLint (10 integrated files, zero errors/warnings) and whitespace checks pass. Live v6 checks cover readable saved fields with no disabled controls, exact source-page shortcuts and current-value comparison, original/extracted page synchronization, local clause edits surviving navigation, pending advanced JSON locking clause edits and marking native validity, and cancel without saving. Desktop and 355px compact layouts have no horizontal overflow; compact source navigation closes the inspector to leave the PDF visible, and viewport overrides are reset. No model calls or saved agreement/approval changes were made. Evidence screenshot: `data/runtime/paper-real-sample/integrated-field-review.jpg`. Existing Browserslist and bundle-size advisories remain.
+# Exact money formatting in PAPER review — 2026-10-18
+
+- [x] Trace amount displays and editors; keep rates, identifiers and literal evidence separate.
+- [x] Add exact decimal-string formatting and guarded money inputs with regression checks.
+- [x] Integrate agreement, invoice, extraction and reconciliation money views without changing payloads.
+- [x] Verify frontend regressions, build, desktop/compact UI and unchanged saved records.
+
+Plan checked: use Indonesian grouping for IDR and explicit currency context. Formatting must not round or pass exact stored decimals through floating-point numbers. Preserve canonical API values, raw JSON, citations, accounting rules and saved history.
+
+Review: shared string-only formatter and locale-aware MoneyInput now cover known monetary schema fields, nested schedule totals/installments, editable agreement/invoice amounts, extracted fields, current-value evidence comparisons, invoice arithmetic presentation and saved reconciliation values. Explicit path semantics exclude arbitrary extensions, rates, quantities, identifiers and bank accounts. Schedule/document currencies stay separate, unknown currency is not invented, and exact JSON remains available. Formatted inputs accept grouped or ungrouped local amounts, retain exact canonical decimal strings, and block invalid/unapplied input. Focus preserves selection and text; native validity is reconciled after host updates.
+
+Verification: all 161 frontend tests pass, including exact precision, scale, negatives, zeros, unknowns, parsing, controlled input behavior, nested currency ownership, literal exclusions and unchanged comparison payloads. Scoped ESLint across 11 integrated source files has zero errors/warnings; production build and whitespace checks pass. Live review confirms the source total uses grouped display and grouped paste retains its exact original decimal string in local canonical JSON, invalid IDR `1.23` stays visible/invalid without replacing that value, and currency switching reformats without changing the amount. Compact 355px and desktop 1280px checks show no page overflow, with viewport restored afterward. Local test revision was cancelled; original approved v3/history and corrected draft v6 remain unchanged. No model calls, approval or database writes. Evidence: `data/runtime/paper-real-sample/money-formatting-review.jpg`. Existing Browserslist and bundle-size advisories remain.
+
+# Source-reviewed full-flow verification and actionable review issues — 2026-10-18
+
+- [x] Inspect saved real documents, publication requirements and reconciliation readiness.
+- [x] Replace verbose warning cards with grouped field-first issues and clearly labelled extraction history; preserve logs and approval checks.
+- [x] Review and publish the local test agreement using transparent test provenance, then confirm invoice association and reconcile through the UI.
+- [x] Verify source shortcuts, discrepancies, frontend checks and responsive UI; record exact outcomes and remaining human decisions.
+
+Plan checked: user authorized end-to-end local testing with the existing PDFs. Preserve extraction and version history, evidence and financial source values. No new model extraction, invented payment terms, production financial decisions or payments. Local test policy provenance must be explicitly labelled; unresolved source and accounting issues remain visible in saved assessments.
+
+Review: compact field-first issue groups preserve every diagnostic under Details. Needs review can filter Missing values (5 fields in agreement v6) and Verify values (13); the 19 current diagnostics group into 18 fields. Extraction history is explicitly distinguished from successfully extracted values. Source and master identifiers remain separate. Publication completeness now checks the validated assigned identity for vendor/store/contract identifiers while rejecting contradictory non-null source IDs; other completeness, roles, evidence and acknowledgements remain enforced.
+
+Local UI result: the reviewed agreement v6 was approved using an explicitly identified development accounting-policy reference, with a reason recording test-only accounting provenance and unresolved installment/tax settings. Restored the retained invoice attempt; reviewed currency against original page 1; preserved original extraction and all source amounts. Confirmed association to the exact approved agreement version through the UI, then saved the reviewed invoice as a new case v1. Result is honestly Incomplete: missing tax invoice, service-period start/end and approved authority for that period. Source IDs/periods remain null, the association is server-stamped, and no AP decision/payment was made. An older duplicate record with unverified allocation was excluded.
+
+Reference-only comparison keeps selected contract values and both PDFs accessible without implying coverage or a successful match. Stored payment narrative has multi-page shortcuts and a collapsed full-clause view; the retained source-pricing diagnostic is visible separately from the four saved server findings. Further matching needs an approved installment allocation/coverage and host withholding/rounding policy, with actual tax supporting evidence; no inferred dates, zero-VAT assertion or certificate was invented.
+
+Verification: 184 frontend tests, 81 focused backend approval/case/association tests, production build (2692 modules), scoped ESLint and whitespace checks pass. Backend scoped Black/isort/Ruff and strict mypy pass. Live original/field and two-PDF comparison shortcuts, missing-vs-present filtering, full 2585-character clause disclosure, loaded invoice/contract PDF images and approval blocking verified. Desktop 1350px and compact 355px have no document overflow; viewport restored. Saved state assertions and sanitized report: `data/runtime/paper-real-sample/full-flow-ui-test-report.json`. Screenshots: `field-issues-review.jpg`, `full-flow-reconciliation.jpg`, `reconciliation-source-discrepancy.jpg` in the same directory. No extraction calls or added extraction cost. Existing build bundle-size/Browserslist advisories remain.
+# Case-oriented PAPER workspace — 2026-10-18
+
+- [x] Inspect saved relationships and define bounded, tenant-scoped workspace indexes and navigation contracts.
+- [x] Add tested read-only indexes for document next actions, contract-linked cases and searchable case summaries.
+- [x] Build modular case/inbox/contract navigation and integrate exact-version review, document actions and reconciliation without losing local edits.
+- [x] Verify regressions, builds, history preservation and the reviewed-source journey in desktop/compact UI; document outcomes.
+
+Plan checked: user authorized the case-oriented UI. Keep extraction, agreement publication, association confirmation, reconciliation and AP decision boundaries intact. Reuse existing editors and saved version history; no new extraction, financial decisions or destructive data changes are needed. The new indexes must paginate/filter on the server and never infer contract links from names or amounts. Existing source links and workflows remain available.
+
+Review: PAPER now opens on a server-searchable Cases queue with status, exact confirmed contract version and next action. Document inbox separates extraction progress from saved workflow status and links to exact saved versions, requiring an explicit choice for multiple records. Contracts exposes confirmed linked-invoice counts and a direct case filter. A case brings its originals, pinned contract review, comparison, findings, AP decision and history into one workspace. Existing editors remain mounted across tabs, with keep/replace protection and latest-intent guards for deferred navigation. Account/backend changes reset the scoped local workspace. Existing upload deep links, archive/restore, manual forms, approval controls and model-independent processing remain intact.
+
+Verification: all 200 frontend tests and 111 focused backend case/association/master/index/repair tests pass; production build (2696 modules), scoped hook/unused-variable lint, backend Ruff/Black/isort and strict mypy pass. Live Source-reviewed case review opened the exact approved contract v6, both originals, the contract's confirmed-invoice filter, document continuation and status filtering. A local correction and original PDF survived tab changes; keep-current-work protected the editor when another case was requested. Compact 355px, desktop 1350px and restored 838px views show no document overflow; temporary viewport overrides were reset and browser error logs are empty. No invoice approval, new version or extraction was performed. The case remains Incomplete with the same four blocking findings.
+
+Legacy source lookup: six older completed extraction jobs lacked canonical source identity metadata. A bounded dry-run validated tenant-owned artifacts before adding only meta.document_id. Source artifacts, job timestamps, archive state and all agreement/case histories remain unchanged. The complete saved-history SHA256 matches the pre-change snapshot (two agreement masters with 3 and 6 versions, one case with 1 version). No migration or new model call is required. Report and screenshot: data/runtime/paper-real-sample/case-workspace-verification.json and case-oriented-workspace.jpg. Current UI instructions are in documentation/PAPER_UI_TESTING.md. Existing Browserslist and bundle-size advisories remain.
+
+# Saved document drafts and explicit case readiness — 2026-10-18
+
+- [x] Add tested, tenant-scoped immutable document draft versions and explicit human review provenance.
+- [x] Add validated configurable required/conditional/optional requirements and a deterministic server readiness projection that preserves accounting guards.
+- [x] Add saved-draft selection and explicit case preparation/reconciliation; retain current assessment APIs and history.
+- [x] Verify migrations, regressions, original histories, production build and the actual desktop/compact UI; document configuration and testing.
+
+Plan checked: invoice review saves without reconciliation or requiring a contract assignment. Case preparation selects exact reviewed document versions, then confirms the contract and checks readiness before an explicit reconciliation action. Missing fields remain saveable in drafts. Policy is server-owned and model independent; optional extraction fields cannot bypass existing billing authority, accounting checks or AP approval. Existing case/extraction/agreement histories are append-only and must not be rewritten. Use additive migration and endpoints, no new extraction calls or financial decisions for verification.
+
+Review: additive migration `a1090c3d67ef` applied and backend restarted. Saved source drafts support rent invoice, tax invoice, utility statement and supporting document roles with typed schemas, tenant isolation, immutable versions, optimistic concurrency, filtered pagination and explicit server-stamped review attribution. Document review saves without contract assignment or case creation. The UI library reopens exact versions; a reviewed invoice starts explicit contract/document selection, read-only readiness, then a separate reconciliation action. Selected reviewed versions and provenance are resolved by the server and retained in the resulting package. Existing manual APIs and case corrections remain available; they cannot claim client-written saved-draft review provenance.
+
+Requirements are validated host-owned required/conditional/optional scalar-field declarations. Typed presence/equality conditions are shared by the actual engine and checklist, with exact decimal equality and per-document same-role evaluation. The checklist prioritizes concise missing prerequisites, keeps completed/optional/not-applicable checks available, and links originals. Optional presence cannot waive coverage, approved installment/withholding rules or AP authority. Empty new extensions preserve old policy/package fingerprints; configured changes bind new hashes. Configuration examples and current UI/API instructions are in `documentation/PAPER_UI_TESTING.md`; the active policy behavior remains unchanged.
+
+Verification: 173 focused backend tests and all 216 frontend tests pass, including real-engine successful preparation, missing prerequisites, duplicate sources, role/tenant/version/provenance guards, SQLite persistence/history, manual API compatibility and no commit after changed readiness. Strict mypy passes 34 source files; scoped Ruff, Black/isort, frontend hooks/unused-import lint, production build (2702 modules) and whitespace checks pass. Existing build bundle-size/Browserslist advisories remain.
+
+Live UI: saved the retained Source-reviewed extraction as draft v1, appended reviewed v2 with only page-1-verified currency IDR corrected, reloaded and reopened it from the server-filtered library, and verified v1 is historical and cannot be revised as current. Both versions retain 10 citations, exact source amounts and unknown source dates/IDs. Prepared the exact approved contract v6 association; readiness shows four blockers (approved service authority, source service start/end, required tax invoice) and disables Run reconciliation. Empty reviewed tax-document selection is explicit; original-source navigation returns to the preserved case preparation. Desktop 1350px and compact 355px have no horizontal document overflow, viewport restored, browser error logs empty. Existing agreement/case history SHA256 remains the unchanged preservation fingerprint with unchanged 3/6 agreement versions and one case v1. No new extraction, assessment, financial decision or cost was created. Sanitized report: `data/runtime/paper-real-sample/saved-drafts-verification.json`; screenshot: `saved-drafts-readiness.jpg` in that directory.
+# PAPER REVIEW field requirement settings — 2026-10-20
+
+- [x] Inspect policy, authorization, persistence and workspace refresh boundaries.
+- [x] Write failing tests for validated, tenant-scoped, versioned policy edits and matching propagation.
+- [x] Add durable backend field requirement settings with conflict protection and authorized updates.
+- [x] Add PAPER REVIEW Settings with per-document required/optional/conditional controls and refresh matching guidance.
+- [x] Verify backend/frontend regressions, production build and rendered desktop/compact settings; document results.
+
+Plan checked: the user explicitly requested configuration inside PAPER REVIEW. Reuse the existing matching requirement contracts and evaluator for rent invoice, tax invoice, utility statement and supporting document fields. Preserve accounting prerequisites, saved source data, assessment history and unsaved document editors. Persist tenant-specific revisions on the backend; no browser-only policy or YAML rewrite. Existing configured defaults apply before a tenant saves an override.
+Plan adjustment after review: preserve the distinction between inherited field defaults and explicit overrides. Saving an unrelated invoice change must not introduce required tax-document presence or disable approved withholding substitutions. Add a regression for effective catalog round trips before live verification.
+
+Review: PAPER REVIEW now includes Settings → Field requirements for rent invoice, tax invoice, utility statement and supporting document. Users can search fields, choose required/optional/conditional, configure typed presence/absence/equality predicates and explanations, and stage a return to deployment defaults. Authorized AP reviewers save shared tenant policy revisions through validated GET/PUT endpoints with optimistic concurrency, immutable audit history and transactional locking. Sparse overrides preserve inherited document-presence and approved tax-substitution semantics. Deployment configuration remains the accounting authority.
+
+Matching integration: field labels, readiness and reconciliation resolve the same effective policy. Saved settings refresh workspace context, invalidate outdated or pending readiness checks and require reassessment before decisions under a different policy. Document packages, selections, local edits, originals and saved histories remain intact. Focus refresh picks up policy changes made elsewhere; editor drafts survive tab navigation and revision conflicts.
+
+Verification: 187 focused backend tests and all 243 frontend tests pass. Migration upgrade/downgrade, persistence/history/rollback, tenant/role validation, concurrent revisions, actual-engine policy propagation and stale decisions are covered. Scoped backend Ruff/Black/strict mypy, frontend hooks/undefined-variable lint, final production build (2705 modules) and whitespace checks pass. Existing Browserslist and bundle-size advisories remain.
+
+Live validation: additive migration `b9040a7fe213` applied locally and API restarted successfully. PAPER settings load revision 0 from the backend. Conditional exact-decimal saves, sparse payloads, preview labels and conflict retention were exercised through an isolated in-memory UI fixture; no live field override was saved. Desktop 1350px and compact 355px layouts have no horizontal document overflow, temporary viewport overrides were reset, and a fresh live reload reports no browser errors. The fingerprint of all 15 original data tables is unchanged: the unchanged preservation fingerprint. No source values, review histories, decisions or model calls were changed. Screenshot: `data/runtime/paper-field-requirements-settings.png`. Usage: `documentation/PAPER_UI_TESTING.md`.
+# Clarify saved invoice field comparisons — 2026-10-23
+
+- [x] Verify the exact saved invoice, missing coverage and current row-status behavior.
+- [x] Add failing regressions for literal field equality, missing source IDs and preserved blocking findings.
+- [x] Separate field-value comparison from saved reconciliation status without changing source data or financial decisions.
+- [x] Verify focused/full frontend tests, build and the actual case in desktop/compact UI; record results.
+
+Plan checked: the user reported that no fields appear to match on invoice the reviewed invoice v1. Correct the misleading comparison display while retaining the saved incomplete assessment, missing coverage, linked-identity provenance, original source values and all findings. No new extraction, assessment, policy change or approval is needed.
+
+Review: live case v1 confirms four blockers: missing tax invoice, missing service-period start/end and unavailable approved authority for that service period. Selected the reviewed contract v6 is approved, but a selected reference alone does not establish invoice coverage. Currency and bank account are equal stored values. Vendor/store/contract source identifiers are null; development-assigned identifiers are assigned linked identities. The UI incorrectly overrode every row, including saved blocking findings, with a generic coverage state.
+
+Changes: direct invoice-field equality/difference and missing values now appear separately from saved results for identifiers, currency and bank account. Vendor/Store labels explicitly identify IDs. Missing invoice fields never fall back to linked IDs. Saved blocking/review findings take precedence over unavailable authority, the case still displays its saved Incomplete outcome and global coverage warning, and complex amount/tax/period/payment checks stay engine-owned. No backend or business-data writes were performed.
+
+Verification: six new tests failed before implementation; all 26 focused comparison/render tests and all 249 frontend tests now pass. Scoped undefined-variable/React-hook lint, production build (2705 modules) and whitespace checks pass. Existing Browserslist/bundle-size advisories remain. Independent review found no blocking issues. The actual case shows equal currency/account, missing source IDs and service-coverage findings, with the same four saved blockers and disabled AP decision. Desktop 1350px and compact 355px have no horizontal document overflow; browser errors are empty and viewport overrides were reset. Repeated read-only API snapshots retain case v1 and contract v6. Screenshot: data/runtime/paper-case-field-comparison-2026-10-23.png.
+# Source review and rerun for the reviewed invoice — 2026-10-23
+
+- [x] Read the current saved case and original invoice/contract PDFs; identify supported corrections with page evidence.
+- [x] Review candidate values independently, keeping source invoice data separate from contract-derived allocation and assigned identifiers.
+- [x] Save supported corrections through the versioned workflow and rerun Document Match under the current policy.
+- [x] Verify the persisted result, retained history and visible findings; document remaining gaps and evidence.
+
+Plan checked: the user explicitly authorized original-document review, source-supported field completion and rerunning Document Match for this invoice. Preserve original extraction and earlier saved versions. Do not invent missing source IDs, tax documents, dates, accounting policy or approvals. Document-derived dates must be explicitly supported; a reviewed allocation must remain distinct from printed invoice dates. Financial approval and payment are outside this request.
+
+Source review: verified the downloaded originals against the actual case/selected-contract API originals by SHA-256; visually reviewed invoice p1 and relevant contract pages, with independent review of contract pp1–3. Invoice p1 explicitly prints a PPh deduction; its date, gross amount, net amount and bank details were already recorded correctly. Contract p2 confirms the first payment amount/date; p3 confirms the account. Contract p1 states the entire lease term, but neither original specifies coverage dates for the first payment. No source vendor/store IDs, invoice contract reference, explicit VAT component, rounding adjustment, tax invoice or withholding certificate was found. The contract tax clause does not specify an approved rate/rounding policy. Preserve printed amounts rather than recalculate the invoice deduction or the retained contract pricing discrepancy.
+
+Changes: appended reviewed invoice draft v3 with positive source-stated `withholding_amount` and exact invoice p1 evidence. Preserved the legacy signed tax adjustment and every other source field/evidence/warning. Reconfirmed the existing selected contract v6 after the invoice fingerprint changed, through server-stamped association selection. Appended case v2 through the existing correction/reassessment API under current policy paper.manual_reconciliation v2; no source extraction or agreement edit was needed.
+
+Result: Incomplete, seven blocking findings: missing tax invoice; missing service start/end; unavailable approved authority for the unspecified service period; missing explicit VAT amount; missing withholding certificate; missing approved withholding rate/rounding policy. Recording the genuine deduction activates the existing structured withholding checks and exposes three additional gaps. No allocation or approval was invented to suppress them.
+
+Verification: Pydantic-validated exact request contracts before applying; optimistic-version/current-policy checks passed. Read-after-write assertions verified reviewed draft v3, case v2, exact corrected invoice equality, unchanged case v1 and earlier draft history, unchanged selected agreement v6 and both original extractions, and no AP decision. Actual refreshed UI displays v2, corrected withholding with p1 source link, all seven findings, preserved reference-only contract and disabled decision controls; browser error log is empty. Screenshot: `data/runtime/paper-kk-tjs-rerun-2026-10-23.png`. Private before/after and operation snapshots are retained in ignored `data/runtime/paper-real-sample/kk-tjs-source-review-*.json`. Task helper processes that stalled in the sandbox were identified and stopped; the application remains running. No production code was changed in this source review.
