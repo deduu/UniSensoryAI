@@ -1,6 +1,7 @@
 """Public reusable extraction facade; no HTTP, queue, or database dependencies."""
 
 import asyncio
+import copy
 
 from src.extraction.capabilities import (
     DocumentExtractionCapability,
@@ -8,6 +9,7 @@ from src.extraction.capabilities import (
     FieldExtractionCapability,
     FieldExtractionInput,
 )
+from src.extraction.capabilities.source_text import source_text_validation_warnings
 from src.extraction.contracts import (
     DocumentResult,
     ExtractionOptions,
@@ -147,10 +149,17 @@ class ExtractionService:
             )
             result = FieldExtractionResult.model_validate(await self._fields.run(data))
             validated = await asyncio.to_thread(
-                SchemaValidationService.validate, result.data, portable, business_model
+                SchemaValidationService.validate,
+                copy.deepcopy(result.data),
+                portable,
+                business_model,
             )
             return FieldExtractionResult.model_validate(
-                {**result.model_dump(exclude={"status"}), "data": validated}
+                {
+                    **result.model_dump(exclude={"status"}),
+                    "data": validated,
+                    "warnings": source_text_validation_warnings(result, validated),
+                }
             )
 
         try:

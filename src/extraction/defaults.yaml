@@ -13,6 +13,9 @@ settings:
     Never invent required values. Keep lists in source order. Do not summarize.
   field_attempts: 2
   evidence_repair_attempts: 2
+  # Narrative copying is opt-in; existing callers retain their candidate values.
+  source_text_strategy: candidate
+  source_text_schema_ids: []
   max_output_tokens: 4096
   page_separator: "\n\n--- PAGE BREAK ---\n\n"
   calls_per_second: 10

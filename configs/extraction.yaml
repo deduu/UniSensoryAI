@@ -10,6 +10,13 @@ settings:
   field_review_max_batches: 32
   field_review_max_source_blocks: 16
   field_review_max_source_chunks: 16
+  # Only these host schemas opt into literal paragraph values and aligned citations.
+  source_text_strategy: verbatim
+  source_text_schema_ids: [paper.rent_agreement]
+  source_text_attempts: 2
+  source_text_max_targets: 32
+  source_text_max_spans: 2048
+  source_text_max_span_chars: 12000
   max_output_tokens: 8192
   calls_per_second: 10
   inference_timeout_seconds: 60

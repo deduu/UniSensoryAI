@@ -36,6 +36,8 @@ from src.extraction.schema_validation import SchemaValidationService
 from src.extraction.settings import ExtractionSettings
 
 from .field_input import FieldExtractionInput
+from .source_text import SourceTextExtractionCapability
+from .source_text_input import SourceTextExtractionInput
 
 logger = structlog.get_logger(__name__)
 
@@ -251,15 +253,26 @@ def _rebase_evidence(evidence: FieldEvidence, old: dict[str, JsonValue]) -> Fiel
 class FieldExtractionCapability(BaseCapability[FieldExtractionInput, FieldExtractionResult]):
     """Extract schema-shaped partial candidates, combine, and validate full data."""
 
-    def __init__(self, gateway: BaseModelGateway, settings: ExtractionSettings) -> None:
+    def __init__(
+        self,
+        gateway: BaseModelGateway,
+        settings: ExtractionSettings,
+        source_text_capability: (
+            BaseCapability[SourceTextExtractionInput, FieldExtractionResult] | None
+        ) = None,
+    ) -> None:
         """Inject model routing and extraction behavior.
 
         Args:
             gateway: Host's model profile resolver and bounded generation service.
             settings: Prompt, retry, and output-token configuration.
+            source_text_capability: Optional replacement for literal clause selection.
         """
         self._gateway = gateway
         self._settings = settings
+        self._source_text = source_text_capability or SourceTextExtractionCapability(
+            gateway, settings
+        )
 
     def _prompt(self, definition: dict[str, JsonValue], blocks: list[dict[str, str]]) -> str:
         return (
@@ -885,13 +898,21 @@ class FieldExtractionCapability(BaseCapability[FieldExtractionInput, FieldExtrac
                 )
             )
         logger.info("fields_extracted", chunk_count=len(chunks), warning_count=len(warnings))
-        return FieldExtractionResult(
+        fields = FieldExtractionResult(
             schema_id=data.external_schema.schema_id,
             schema_version=data.external_schema.version,
             data=validated,
             model_ids=tuple(dict.fromkeys(identity for identity in model_ids if identity.strip())),
             evidence=tuple(verified),
             warnings=tuple(warnings),
+        )
+        return await self._source_text.run(
+            SourceTextExtractionInput(
+                document=data.document,
+                external_schema=data.external_schema,
+                fields=fields,
+                model_profile=data.model_profile,
+            )
         )
 
     async def _extract_chunk(
