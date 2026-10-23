@@ -1,0 +1,61 @@
+# Public IP HTTPS + one shared password. Use with docker-compose.yml ONLY:
+# docker compose -f docker-compose.yml -f docker-compose.demo.yml ...
+services:
+  db:
+    ports: !reset []
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB}
+
+  redis:
+    ports: !reset []
+
+  web:
+    profiles: [development-web]
+
+  api:
+    build:
+      target: runtime
+      args:
+        INSTALL_LOCAL_VLM: "false"
+    restart: always
+    environment:
+      AUTH_ENABLED: "false"
+      DEFAULT_TENANT_ID: default
+      CORS_ALLOW_ORIGINS: https://${DEMO_PUBLIC_IP:?Set the EC2 public IPv4}
+      OAUTH_GOOGLE_CLIENT_ID: ""
+      OAUTH_GOOGLE_CLIENT_SECRET: ""
+      OAUTH_GITHUB_CLIENT_ID: ""
+      OAUTH_GITHUB_CLIENT_SECRET: ""
+    ports: !reset []
+    volumes: !override
+      - uploads:/app/data/uploads
+
+  caddy:
+    image: unisensory-demo-gateway:local
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.demo
+    restart: always
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile.demo:/etc/caddy/Caddyfile:ro
+      - ./deploy/Caddyfile.demo-routes:/etc/caddy/demo-routes:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      ACME_EMAIL: ${ACME_EMAIL:?Set the certificate account email}
+      DEMO_PUBLIC_IP: ${DEMO_PUBLIC_IP:?Set the EC2 public IPv4}
+      DEMO_USERNAME: ${DEMO_USERNAME:-admin}
+      DEMO_PASSWORD_HASH: ${DEMO_PASSWORD_HASH:?Generate the shared password hash}
+
+volumes:
+  uploads:
+  caddy_data:
+  caddy_config:

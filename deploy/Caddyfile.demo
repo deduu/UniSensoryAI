@@ -1,0 +1,16 @@
+{
+    email {$ACME_EMAIL}
+    # IP clients can omit SNI; Docker's private address is not the certificate name.
+    default_sni {$DEMO_PUBLIC_IP}
+}
+
+https://{$DEMO_PUBLIC_IP} {
+    tls {
+        issuer acme {
+            dir https://acme-v02.api.letsencrypt.org/directory
+            profile shortlived
+        }
+    }
+
+    import /etc/caddy/demo-routes
+}

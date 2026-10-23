@@ -3,6 +3,14 @@
 This folder bundles the production overlay for hosting UniSensoryAI on a
 single small VPS. The frontend ships separately to Cloudflare Pages.
 
+For a shared EC2 demo without purchasing a domain, use
+[public IP HTTPS and shared password access](AWS_DEMO_NO_DOMAIN.md). That option
+serves the frontend and API together with the separate `docker-compose.demo.yml`
+overlay.
+
+For AWS hosting, see [AWS demo hosting guide](AWS_DEMO.md) for the current
+Lambda readiness assessment, cost tradeoffs and EC2/Lightsail setup steps.
+
 For the local four-service development stack, use `docker compose up --build`;
 see the root README. The production overlay requires Docker Compose 2.24.4+
 for explicit port/mount replacement. It excludes the local Vite service and
@@ -64,10 +72,11 @@ cp .env.example .env
 
 ### 4. Bring it up
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
-# Run migrations once the DB is healthy:
-docker compose -f docker-compose.yml -f docker-compose.prod.yml exec api \
+docker compose -f docker-compose.yml -f docker-compose.prod.yml build api
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --wait db redis
+docker compose -f docker-compose.yml -f docker-compose.prod.yml run --rm --no-deps api \
     alembic upgrade head
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d api caddy
 ```
 
 Caddy will fetch a Let's Encrypt cert for `$API_DOMAIN` on first request.

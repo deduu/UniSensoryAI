@@ -34,6 +34,7 @@ export default function Sidebar() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const isDark = theme === 'dark'
+  const sharedDemo = import.meta.env.VITE_SHARED_DEMO === 'true'
 
   const handleLogout = async () => {
     setAccountOpen(false)
@@ -101,14 +102,20 @@ export default function Sidebar() {
                 <Settings className="h-4 w-4" />
                 Settings
               </Link>
-              <button
-                type="button"
-                onClick={handleLogout}
-                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-ink-muted transition-colors hover:bg-surface-subtle hover:text-ink"
-              >
-                <LogOut className="h-4 w-4" />
-                Sign out
-              </button>
+              {sharedDemo ? (
+                <p className="px-3 py-2 text-xs text-ink-faint">
+                  Shared demo. Close your private browser window when finished.
+                </p>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-ink-muted transition-colors hover:bg-surface-subtle hover:text-ink"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Sign out
+                </button>
+              )}
             </div>
           </div>
         )}
