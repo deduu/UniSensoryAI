@@ -6,6 +6,7 @@ from typing import Any
 from src.extraction.contracts import ModelDescriptor, ModelRequest, ModelResponse
 from src.extraction.errors import ExtractionError
 from src.extraction.ports.generation import BaseGenerationProvider
+from src.extraction.usage import normalized_usage
 from src.orchestration.llm.base import LLMMessage, LLMProvider
 
 from ._validation import normalize_response, validate_request
@@ -60,7 +61,8 @@ class ChatGenerationProvider(BaseGenerationProvider):
                 response.content,
                 self.descriptor.model_id,
                 response.finish_reason,
-                response.token_usage,
+                {**normalized_usage(response.raw.get("usage")), **response.token_usage},
+                response_model_id=response.model,
             )
         except asyncio.CancelledError:
             raise

@@ -135,6 +135,12 @@ async def build_extraction_service(
             bindings,
             calls_per_second=behavior.calls_per_second,
             timeout_seconds=behavior.inference_timeout_seconds,
+            pricing={
+                name: profile.pricing
+                for name, profile in config.profiles.items()
+                if profile.pricing is not None
+            },
+            provider_names={name: profile.provider for name, profile in config.profiles.items()},
         )
         return ExtractionService(
             reader=reader or PdfReader(),

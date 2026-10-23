@@ -8,10 +8,22 @@ from collections.abc import Mapping
 from pydantic import BaseModel, ConfigDict, Field
 
 from src.extraction.contracts import ModelDescriptor, ModelRequest, ModelResponse
+from src.extraction.contracts.usage import ModelPricing
 from src.extraction.errors import ExtractionError
 from src.extraction.ports.gateway import BaseModelGateway
 from src.extraction.ports.generation import BaseGenerationProvider
 from src.extraction.providers._validation import normalize_response, validate_request
+from src.extraction.usage import active_usage_collector
+
+_SAFE_PROVIDER_CODES = frozenset(
+    {
+        "context_limit",
+        "unsupported_model_features",
+        "model_response_invalid",
+        "model_timeout",
+        "provider_error",
+    }
+)
 
 
 class _Settings(BaseModel):
@@ -34,6 +46,8 @@ class ModelGateway(BaseModelGateway):
         *,
         calls_per_second: int = 10,
         timeout_seconds: float = 60,
+        pricing: Mapping[str, ModelPricing] | None = None,
+        provider_names: Mapping[str, str] | None = None,
     ) -> None:
         """Configure profiles and operating limits without loading models.
 
@@ -41,6 +55,8 @@ class ModelGateway(BaseModelGateway):
             providers: Logical profile names mapped to provider instances.
             calls_per_second: Maximum call starts in each one-second window.
             timeout_seconds: Maximum wait including scheduling and inference.
+            pricing: Optional host-provided per-profile model-bound price snapshots.
+            provider_names: Safe factory identities; no endpoint or credentials.
         """
         self._settings = _Settings(
             calls_per_second=calls_per_second, timeout_seconds=timeout_seconds
@@ -59,6 +75,19 @@ class ModelGateway(BaseModelGateway):
         }
         self._rate_lock = asyncio.Lock()
         self._starts: deque[float] = deque()
+        self._pricing = {
+            name: ModelPricing.model_validate(rate) for name, rate in (pricing or {}).items()
+        }
+        if any(
+            name not in self._providers
+            or rate.model_id != self._providers[name].descriptor.model_id
+            for name, rate in self._pricing.items()
+        ):
+            raise ValueError("Pricing must bind to its configured profile and exact model.")
+        self._provider_names = {
+            name: (provider_names or {}).get(name, type(provider).__name__)
+            for name, provider in self._providers.items()
+        }
 
     def _provider(self, profile: str) -> BaseGenerationProvider:
         provider = self._providers.get(profile)
@@ -82,17 +111,62 @@ class ModelGateway(BaseModelGateway):
                 delay = 1.0 - (now - self._starts[0])
             await asyncio.sleep(delay)
 
-    async def _call(self, provider: BaseGenerationProvider, request: ModelRequest) -> ModelResponse:
+    async def _call(
+        self, profile: str, provider: BaseGenerationProvider, request: ModelRequest
+    ) -> ModelResponse:
         async with self._semaphores[id(provider)]:
             await self._wait_for_rate_slot()
-            response = await provider.complete(request)
-            if not isinstance(response, ModelResponse):
-                raise ExtractionError(
-                    "model_response_invalid", "The provider returned an invalid response."
+            collector = active_usage_collector()
+            index = (
+                collector.begin(
+                    profile=profile,
+                    provider=self._provider_names[profile],
+                    model_id=provider.descriptor.model_id,
+                    purpose=request.purpose,
+                    pricing=self._pricing.get(profile),
                 )
-            return normalize_response(
-                response.content, response.model_id, response.finish_reason, response.usage
+                if collector is not None
+                else None
             )
+            try:
+                response = await provider.complete(request)
+                if not isinstance(response, ModelResponse):
+                    raise ExtractionError(
+                        "model_response_invalid", "The provider returned an invalid response."
+                    )
+                response = normalize_response(
+                    response.content,
+                    response.model_id,
+                    response.finish_reason,
+                    response.usage,
+                    response_model_id=response.response_model_id,
+                )
+            except asyncio.CancelledError:
+                if collector is not None and index is not None:
+                    collector.finish(index, status="cancelled", error_code="cancelled")
+                raise
+            except Exception as exc:
+                if collector is not None and index is not None:
+                    code = exc.code if isinstance(exc, ExtractionError) else "provider_error"
+                    collector.finish(
+                        index,
+                        status="failed",
+                        usage=exc.usage if isinstance(exc, ExtractionError) else None,
+                        response_model_id=(
+                            exc.response_model_id if isinstance(exc, ExtractionError) else None
+                        ),
+                        error_code=code if code in _SAFE_PROVIDER_CODES else "provider_error",
+                    )
+                raise
+            if collector is not None and index is not None:
+                collector.finish(
+                    index,
+                    status="succeeded",
+                    usage=response.usage,
+                    model_id=response.model_id,
+                    response_model_id=response.response_model_id,
+                )
+            return response
 
     async def generate(self, profile: str, request: ModelRequest) -> ModelResponse:
         """Validate compatibility and perform a bounded, sanitized model call."""
@@ -101,7 +175,7 @@ class ModelGateway(BaseModelGateway):
         validate_request(provider.descriptor, request)
         try:
             return await asyncio.wait_for(
-                self._call(provider, request), timeout=self._settings.timeout_seconds
+                self._call(profile, provider, request), timeout=self._settings.timeout_seconds
             )
         except asyncio.CancelledError:
             raise
@@ -116,7 +190,9 @@ class ModelGateway(BaseModelGateway):
                 "provider_error": "The model provider failed to complete the request.",
             }
             code = exc.code if exc.code in messages else "provider_error"
-            raise ExtractionError(code, messages[code]) from None
+            raise ExtractionError(
+                code, messages[code], usage=exc.usage, response_model_id=exc.response_model_id
+            ) from None
         except Exception:  # noqa: BLE001 - Normalize failures from arbitrary injected providers.
             raise ExtractionError(
                 "provider_error", "The model provider failed to complete the request."

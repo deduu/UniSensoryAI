@@ -3,6 +3,7 @@
 from pydantic import Field
 
 from .contracts.base import _Contract
+from .contracts.model_pricing import ModelPricing
 
 
 class ProviderProfile(_Contract):
@@ -19,3 +20,4 @@ class ProviderProfile(_Contract):
     max_images: int = Field(default=1, ge=0)
     concurrency: int = Field(default=1, ge=1)
     connect_retries: int = Field(default=0, ge=0, le=3)
+    pricing: ModelPricing | None = None

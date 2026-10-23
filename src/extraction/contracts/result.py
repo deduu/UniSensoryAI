@@ -7,6 +7,7 @@ from pydantic import computed_field
 from .base import _Contract
 from .document import DocumentResult
 from .field_result import FieldExtractionResult
+from .usage import ExtractionUsage
 
 
 class ExtractionResult(_Contract):
@@ -15,6 +16,7 @@ class ExtractionResult(_Contract):
     schema_version: Literal["1"] = "1"
     document: DocumentResult
     fields: FieldExtractionResult | None = None
+    usage: ExtractionUsage | None = None
 
     @computed_field  # type: ignore[prop-decorator]
     @property

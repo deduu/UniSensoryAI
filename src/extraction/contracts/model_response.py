@@ -12,3 +12,4 @@ class ModelResponse(_Contract):
     model_id: str
     finish_reason: str | None = None
     usage: dict[str, int] = Field(default_factory=dict)
+    response_model_id: str | None = None

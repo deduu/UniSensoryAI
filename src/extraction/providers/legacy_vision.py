@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from src.extraction.contracts import ModelDescriptor, ModelRequest, ModelResponse
 from src.extraction.errors import ExtractionError
 from src.extraction.ports.generation import BaseGenerationProvider
+from src.extraction.usage import normalized_usage
 
 from ._validation import normalize_response, validate_request
 
@@ -98,7 +99,11 @@ class LegacyVisionGenerationProvider(BaseGenerationProvider):
             image=image_data, prompt=request.prompt, max_tokens=request.max_output_tokens
         )
         if not isinstance(raw, dict) or raw.get("error"):
-            raise ExtractionError("model_response_invalid", "The local model returned a failure.")
+            raise ExtractionError(
+                "model_response_invalid",
+                "The local model returned a failure.",
+                usage=normalized_usage(raw.get("usage")) if isinstance(raw, dict) else None,
+            )
         metadata = raw.get("raw_response")
         if not isinstance(metadata, dict):
             metadata = {}

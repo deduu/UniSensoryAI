@@ -9,6 +9,7 @@ from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, SecretStr, field_
 from src.extraction.contracts import ModelDescriptor, ModelRequest, ModelResponse
 from src.extraction.errors import ExtractionError
 from src.extraction.ports.generation import BaseGenerationProvider
+from src.extraction.usage import normalized_usage
 
 from ._validation import normalize_response, validate_request
 
@@ -111,8 +112,15 @@ class OpenAICompatibleGenerationProvider(BaseGenerationProvider):
         url = f"{str(self._settings.base_url).rstrip('/')}/chat/completions"
         response = await self._client.post(url, headers=headers, json=self._payload(request))
         response.raise_for_status()
+        usage: dict[str, int] = {}
+        response_model_id: str | None = None
         try:
             body = response.json()
+            if isinstance(body, dict):
+                usage = normalized_usage(body.get("usage"))
+                reported_model = body.get("model")
+                if isinstance(reported_model, str) and reported_model.strip():
+                    response_model_id = reported_model
             if not isinstance(body, dict) or body.get("error"):
                 raise ValueError
             choice = body["choices"][0]
@@ -124,12 +132,16 @@ class OpenAICompatibleGenerationProvider(BaseGenerationProvider):
                 self.descriptor.model_id,
                 choice.get("finish_reason"),
                 body.get("usage"),
+                response_model_id=response_model_id,
             )
         except ExtractionError:
             raise
         except (ValueError, KeyError, IndexError, TypeError, AttributeError):
             raise ExtractionError(
-                "model_response_invalid", "The model returned an invalid response."
+                "model_response_invalid",
+                "The model returned an invalid response.",
+                usage=usage,
+                response_model_id=response_model_id,
             ) from None
 
     async def complete(self, request: ModelRequest) -> ModelResponse:
