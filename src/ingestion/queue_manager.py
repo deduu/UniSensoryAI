@@ -10,6 +10,8 @@ from typing import Any
 import src.db.session as db_session
 
 from ..db.models.ingestion import IngestionStatus
+from ..extraction.cancelled_error import ExtractionCancelledError
+from ..extraction.errors import ExtractionError
 from ..services.document import DocumentService
 from ..services.ingestion import IngestionService
 from ..services.upload_storage import resolve_upload_path
@@ -224,26 +226,45 @@ class IngestionQueue:
                             result.release_artifact()
                         await session.commit()
 
-                except asyncio.CancelledError:
+                except asyncio.CancelledError as error:
+                    usage = (
+                        error.usage_summary if isinstance(error, ExtractionCancelledError) else None
+                    )
                     if isinstance(result, QueuedWorkflowResult):
+                        usage = usage or result.recorded_usage
                         await result.discard_uncommitted_artifact()
+                    if usage is not None:
+                        raise ExtractionCancelledError(usage) from None
                     raise
                 except Exception as e:
+                    usage = e.usage_summary if isinstance(e, ExtractionError) else None
+                    if usage is None and isinstance(result, QueuedWorkflowResult):
+                        usage = result.recorded_usage
                     if isinstance(result, QueuedWorkflowResult):
                         await result.discard_uncommitted_artifact()
                     logger.exception("Error processing job %s", job_id)
                     async with db_session.session_manager.session() as session:
                         service = IngestionService(session)
-                        await service.mark_failed(job_id, str(e))
+                        if usage is not None:
+                            await service.mark_failed(job_id, str(e), usage=usage)
+                        else:
+                            await service.mark_failed(job_id, str(e))
                         await session.commit()
                 finally:
                     self.queue.task_done()
                     task_done = True
 
-            except asyncio.CancelledError:
+            except asyncio.CancelledError as error:
                 if job_id is not None:
                     await recover_interrupted_workflow(
-                        job_id, self.requeue, service_factory=IngestionService
+                        job_id,
+                        self.requeue,
+                        service_factory=IngestionService,
+                        **(
+                            {"usage": error.usage_summary}
+                            if isinstance(error, ExtractionCancelledError)
+                            else {}
+                        ),
                     )
                 break
             except Exception:

@@ -29,6 +29,7 @@ from src.paper.contracts import (
     ReviseAgreementRequest,
 )
 from src.paper.errors import AgreementMasterError
+from src.paper.parties import DeterministicPartyRoleValidator, load_party_role_settings
 from src.paper.schemas import PAPER_SCHEMA_NAMES, get_paper_schema
 from src.paper.service import AgreementMasterService
 from src.paper.settings import AgreementMasterSettings
@@ -132,7 +133,24 @@ async def get_agreement_service(
     settings: Annotated[AgreementMasterSettings, Depends(get_paper_settings)],
 ) -> AgreementMasterService:
     """Inject the SQL adapter without creating inference providers."""
-    return AgreementMasterService(SqlAlchemyAgreementRepository(db), settings=settings)
+    configured = os.getenv("PAPER_PARTY_ROLES_CONFIG_PATH")
+    try:
+        party_settings = await load_party_role_settings(
+            FilePath(configured) if configured else None
+        )
+    except ValueError:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "invalid_configuration",
+                "message": "Party role configuration is invalid.",
+            },
+        ) from None
+    return AgreementMasterService(
+        SqlAlchemyAgreementRepository(db),
+        settings=settings,
+        party_role_validator=DeterministicPartyRoleValidator(party_settings),
+    )
 
 
 async def _commit(db: AsyncSession) -> None:

@@ -22,8 +22,13 @@ from src.api.paper_routes import (
     get_paper_settings,
 )
 from src.db.models.user import User
+from src.paper.association.candidates import AssociationCandidates
+from src.paper.association.query import AssociationQuery
+from src.paper.association.service import AssociationService
+from src.paper.association.settings import AssociationSettings, load_association_settings
 from src.paper.contracts import AgreementActor
 from src.paper.errors import AgreementMasterError
+from src.paper.field_policy.service import FieldPolicyService
 from src.paper.reconciliation.composition import (
     build_reconciliation_engine,
     load_reconciliation_settings,
@@ -39,6 +44,7 @@ from src.paper.reconciliation.workflow import InvoiceCaseService
 from src.paper.service import AgreementMasterService
 from src.paper.settings import AgreementMasterSettings
 from src.services.invoice_case_repository import SqlAlchemyInvoiceCaseRepository
+from src.services.paper_field_policy_repository import SqlAlchemyFieldPolicyRepository
 
 router = APIRouter(
     prefix="/v1/paper/cases",
@@ -63,7 +69,7 @@ def _settings(value: object) -> ReconciliationSettings:
         ) from None
 
 
-async def get_reconciliation_settings(request: Request) -> ReconciliationSettings:
+async def get_base_reconciliation_settings(request: Request) -> ReconciliationSettings:
     """Load and cache server-owned reconciliation policy per application.
 
     Args:
@@ -91,10 +97,22 @@ async def get_reconciliation_settings(request: Request) -> ReconciliationSetting
             return _settings(current)
 
 
+async def get_reconciliation_settings(
+    user: Annotated[UserContext, Depends(get_user_context)],
+    db: Annotated[AsyncSession, Depends(get_paper_db)],
+    base: Annotated[ReconciliationSettings, Depends(get_base_reconciliation_settings)],
+) -> ReconciliationSettings:
+    """Resolve durable tenant overrides for every matching and decision request."""
+    with _domain_errors():
+        return await FieldPolicyService(SqlAlchemyFieldPolicyRepository(db), base).effective(
+            tenant_id=user.tenant_id
+        )
+
+
 async def get_invoice_actor(
     user: Annotated[UserContext, Depends(get_user_context)],
     db: Annotated[AsyncSession, Depends(get_paper_db)],
-    settings: Annotated[ReconciliationSettings, Depends(get_reconciliation_settings)],
+    settings: Annotated[ReconciliationSettings, Depends(get_base_reconciliation_settings)],
 ) -> AgreementActor:
     """Resolve AP authority using persisted user roles in the current tenant.
 
@@ -127,10 +145,40 @@ async def get_invoice_actor(
     return AgreementActor(tenant_id=user.tenant_id, user_id=user.user_id, can_approve=allowed)
 
 
+async def get_contract_association_service(
+    request: Request,
+    master: Annotated[AgreementMasterService, Depends(get_agreement_service)],
+) -> AssociationService:
+    """Compose model-independent suggestions with host-owned policy and scoped storage.
+
+    Args:
+        request: Application configuration cache; clients cannot select policy.
+        master: Injected agreement service in the request transaction.
+
+    Returns:
+        Read-only candidate discovery and exact association validation.
+    """
+    with _domain_errors():
+        lock = getattr(request.app.state, "paper_association_lock", None)
+        if lock is None:
+            lock = asyncio.Lock()
+            request.app.state.paper_association_lock = lock
+        async with lock:
+            settings = getattr(request.app.state, "paper_association_settings", None)
+            if settings is None:
+                configured = os.getenv("PAPER_ASSOCIATION_CONFIG_PATH")
+                settings = await load_association_settings(
+                    FilePath(configured) if configured else None
+                )
+                request.app.state.paper_association_settings = settings
+            return AssociationService(master, settings=AssociationSettings.model_validate(settings))
+
+
 async def get_invoice_case_service(
     db: Annotated[AsyncSession, Depends(get_paper_db)],
     master: Annotated[AgreementMasterService, Depends(get_agreement_service)],
     settings: Annotated[ReconciliationSettings, Depends(get_reconciliation_settings)],
+    association: Annotated[AssociationService, Depends(get_contract_association_service)],
 ) -> InvoiceCaseService:
     """Compose case storage and approved agreement reads in one transaction.
 
@@ -138,6 +186,7 @@ async def get_invoice_case_service(
         db: Host session shared by both repository adapters.
         master: Existing approved agreement service using the same session.
         settings: Host-owned completeness, matching, and AP policy.
+        association: Injected candidate and confirmation validation policy.
 
     Returns:
         Model-independent case workflow with injected deterministic rules.
@@ -147,6 +196,7 @@ async def get_invoice_case_service(
         master=master,
         engine=build_reconciliation_engine(settings),
         settings=settings,
+        association=association,
     )
 
 
@@ -181,12 +231,33 @@ async def read_paper_review_context(
         override_codes=case_settings.override_codes,
         policy_id=case_settings.policy_id,
         policy_version=case_settings.policy_version,
+        field_requirements=case_settings.field_requirements,
         enabled_rules=case_settings.enabled_rules,
         allow_withholding_without_vat_invoice=case_settings.allow_withholding_without_vat_invoice,
         withholding_required_supporting_types=case_settings.withholding_required_supporting_types,
         require_independent_agreement_approval=agreement_settings.require_independent_approval,
         require_independent_case_approval=case_settings.require_independent_approval,
     )
+
+
+@router.post("/association/candidates", response_model=AssociationCandidates)
+async def suggest_contract_associations(
+    body: AssociationQuery,
+    actor: Annotated[AgreementActor, Depends(get_invoice_actor)],
+    service: Annotated[AssociationService, Depends(get_contract_association_service)],
+) -> AssociationCandidates:
+    """Suggest approved contracts without assigning identity or changing stored data.
+
+    Args:
+        body: Source invoice and optional reviewed coverage, with bounded catalog paging.
+        actor: Trusted tenant scope established by the host.
+        service: Injected deterministic discovery service.
+
+    Returns:
+        Ranked candidates, match explanations, coverage and scan continuation.
+    """
+    with _domain_errors():
+        return await service.suggest(actor=actor, query=body)
 
 
 @router.post("", response_model=InvoiceCaseVersion, status_code=201)
@@ -208,7 +279,9 @@ async def create_invoice_case(
         Initial case version, including findings or a duplicate disposition.
     """
     with _domain_errors():
-        result = await service.create_case(actor=actor, package=body)
+        # Manual imports own their fields. Only from-drafts resolves immutable review provenance.
+        manual = body.model_copy(update={"document_draft_references": ()})
+        result = await service.create_case(actor=actor, package=manual)
         await _commit(db)
         return result
 
@@ -260,7 +333,7 @@ async def revise_invoice_case(
             actor=actor,
             case_id=case_id,
             expected_version=body.expected_version,
-            package=body.package,
+            package=body.package.model_copy(update={"document_draft_references": ()}),
         )
         await _commit(db)
         return result

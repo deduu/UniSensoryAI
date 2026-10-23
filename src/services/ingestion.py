@@ -5,6 +5,7 @@ from typing import Optional, Any, Sequence
 from .base import BaseService
 from ..db.models.ingestion import IngestionJob, IngestionStatus
 import uuid
+from src.extraction.contracts.usage import ExtractionUsage
 
 class IngestionService(BaseService[IngestionJob]):
     def __init__(self, db: AsyncSession):
@@ -59,8 +60,14 @@ class IngestionService(BaseService[IngestionJob]):
 
         return await self.update(job_id, **update_data)
         
-    async def mark_failed(self, job_id: str, error: str) -> IngestionJob:
-        return await self.update_status(job_id, IngestionStatus.FAILED, {"error": error})
+    async def mark_failed(
+        self, job_id: str, error: str, *, usage: ExtractionUsage | None = None
+    ) -> IngestionJob:
+        """Retain a safe error and optional validated workflow usage ledger."""
+        metadata: dict[str, Any] = {"error": error}
+        if usage is not None:
+            metadata["usage"] = ExtractionUsage.model_validate(usage).model_dump(mode="json")
+        return await self.update_status(job_id, IngestionStatus.FAILED, metadata)
 
     async def mark_completed(self, job_id: str, result_summary: Optional[dict[str, Any]] = None) -> IngestionJob:
         return await self.update_status(job_id, IngestionStatus.COMPLETED, result_summary)

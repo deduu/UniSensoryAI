@@ -200,6 +200,7 @@ async def test_fields_success_persists_evidence_without_heavy_job_metadata(
         },
     )
     assert "INV-123" not in str(output["job_metadata"])
+    assert output["job_metadata"]["document_id"] == document().document_id
     assert "data_base64" not in str(output["chunks"])
     artifact = tmp_path / output["chunks"][0]["artifact_name"]
     restored = PaperExtractionResult.model_validate_json(artifact.read_text())

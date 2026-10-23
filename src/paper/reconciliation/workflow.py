@@ -2,11 +2,16 @@
 
 import asyncio
 from collections.abc import Awaitable
+from datetime import datetime, timezone
 from typing import TypeVar
 
 import structlog
 from pydantic import Field
 
+from src.paper.association.confirmation import AssociationConfirmation
+from src.paper.association.fingerprints import invoice_fingerprint
+from src.paper.association.query import AssociationQuery
+from src.paper.association.service import AssociationService
 from src.paper.contracts import AgreementActor, AgreementLookup, AgreementVersion
 from src.paper.contracts._base import Identifier, _Contract
 from src.paper.errors import AgreementMasterError
@@ -57,6 +62,7 @@ class InvoiceCaseService:
         master: AgreementMasterService,
         engine: ReconciliationEngine,
         settings: ReconciliationSettings,
+        association: AssociationService | None = None,
     ) -> None:
         """Inject lifecycle storage, approved references, and configured rules.
 
@@ -65,11 +71,73 @@ class InvoiceCaseService:
             master: Approved agreement service with injected storage.
             engine: Pure deterministic rules with no external I/O.
             settings: Host-owned timeout and AP publication policy.
+            association: Optional injected contract discovery and validation service.
         """
         self._repository = repository
         self._master = master
         self._engine = engine
         self._settings = ReconciliationSettings.model_validate(settings.model_dump(mode="json"))
+        self._association = association
+
+    async def _confirm_association(
+        self,
+        actor: AgreementActor,
+        package: InvoicePackage,
+        previous: InvoicePackage | None = None,
+    ) -> InvoicePackage:
+        selection = package.association
+        if selection is None:
+            if previous is not None and previous.association is not None:
+                raise AgreementMasterError(
+                    "conflict", "Confirm the contract association again before saving a correction."
+                )
+            return package
+        if self._association is None:
+            raise AgreementMasterError(
+                "invalid_configuration", "Contract association is not configured by this host."
+            )
+        binding = invoice_fingerprint(package.invoice, package.review_context)
+        if (
+            isinstance(selection, AssociationConfirmation)
+            and selection.invoice_fingerprint != binding
+        ):
+            raise AgreementMasterError(
+                "conflict", "Invoice or allocation changed; confirm the contract association again."
+            )
+        candidate = await self._run(
+            self._association.candidate(
+                actor=actor,
+                query=AssociationQuery(
+                    invoice=package.invoice, review_context=package.review_context
+                ),
+                selection=selection,
+            )
+        )
+        if not candidate.eligible or candidate.identity != package.identity:
+            raise AgreementMasterError(
+                "invalid_agreement",
+                "The selected approved contract does not match assigned identity.",
+            )
+        if previous is not None and selection == previous.association:
+            # Provenance is reused only from the trusted stored snapshot.
+            return package
+        confirmation = AssociationConfirmation(
+            agreement_id=candidate.agreement_id,
+            version_number=candidate.version_number,
+            reason=selection.reason,
+            confirmed_by=actor.user_id,
+            confirmed_at=datetime.now(timezone.utc),
+            invoice_fingerprint=binding,
+            signals=candidate.signals,
+            policy_id=self._association.settings.policy_id,
+            policy_version=self._association.settings.policy_version,
+        )
+        return InvoicePackage.model_validate(
+            {
+                **package.model_dump(mode="json"),
+                "association": confirmation.model_dump(mode="json"),
+            }
+        )
 
     async def _run(self, operation: Awaitable[_T]) -> _T:
         try:
@@ -102,6 +170,24 @@ class InvoiceCaseService:
                     lookup=AgreementLookup(identity=package.identity, as_of=last),
                 )
             )
+        association = package.association
+        if association is not None:
+            if not isinstance(association, AssociationConfirmation) or (
+                association.invoice_fingerprint
+                != invoice_fingerprint(package.invoice, package.review_context)
+            ):
+                raise AgreementMasterError(
+                    "conflict", "Contract association requires confirmation."
+                )
+            for authority in (start, end):
+                if authority is not None and (
+                    authority.agreement_id != association.agreement_id
+                    or authority.version_number != association.version_number
+                ):
+                    raise AgreementMasterError(
+                        "conflict",
+                        "Approved contract authority changed; confirm the association again.",
+                    )
         assessment = self._engine.assess(
             package, agreement_start=start, agreement_end=end, tenant_id=actor.tenant_id
         )
@@ -110,6 +196,23 @@ class InvoiceCaseService:
                 "invalid_configuration", "Case workflow and rule policies must agree."
             )
         return assessment
+
+    async def preview_assessment(
+        self, *, actor: AgreementActor, package: InvoicePackage
+    ) -> tuple[InvoicePackage, ReconciliationAssessment]:
+        """Resolve current authority and association without writing case history.
+
+        Args:
+            actor: Trusted host actor and tenant.
+            package: Selected, source-qualified documents and assigned identity.
+
+        Returns:
+            Server-confirmed package and a current advisory assessment.
+        """
+        actor = AgreementActor.model_validate(actor)
+        package = InvoicePackage.model_validate(package)
+        confirmed = await self._confirm_association(actor, package)
+        return confirmed, await self._assess(actor, confirmed)
 
     async def create_case(
         self,
@@ -128,6 +231,7 @@ class InvoiceCaseService:
         """
         actor = AgreementActor.model_validate(actor)
         package = InvoicePackage.model_validate(package)
+        package = await self._confirm_association(actor, package)
         assessment = await self._assess(actor, package)
         result = await self._run(
             self._repository.create(
@@ -169,6 +273,7 @@ class InvoiceCaseService:
             raise AgreementMasterError(
                 "invalid_agreement", "Canonical case identity cannot change."
             )
+        package = await self._confirm_association(actor, package, previous.package)
         assessment = await self._assess(actor, package)
         result = await self._run(
             self._repository.append(

@@ -1,0 +1,9 @@
+policy_id: paper.contract_association
+policy_version: '1'
+contract_weight: 100
+identity_weight: 60
+supplier_weight: 20
+location_weight: 20
+history_page_limit: 100
+max_history_pages: 10
+timeout_seconds: 15

@@ -97,6 +97,34 @@ async def test_case_revision_passes_expected_version(setup: _Setup) -> None:
 
 
 @pytest.mark.asyncio
+async def test_manual_case_routes_cannot_claim_saved_document_review_provenance(
+    setup: _Setup,
+) -> None:
+    app, service, _ = setup
+    payload = package().model_dump(mode="json")
+    payload["document_draft_references"] = [
+        {
+            "draft_id": "unverified-draft",
+            "version_number": 9,
+            "role": "rent_invoice",
+            "source_document_id": "invoice-source",
+            "reviewed_by": "someone-else",
+            "reviewed_at": datetime.now(timezone.utc).isoformat(),
+        }
+    ]
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        initial = await client.post("/v1/paper/cases", json=payload)
+        revision = await client.post(
+            "/v1/paper/cases/case-1/versions", json={"expected_version": 1, "package": payload}
+        )
+    assert initial.status_code == revision.status_code == 201
+    assert service.create_case.await_args.kwargs["package"].document_draft_references == ()
+    assert service.revise_case.await_args.kwargs["package"].document_draft_references == ()
+
+
+@pytest.mark.asyncio
 async def test_ap_decision_cannot_supply_reviewer_or_reference(setup: _Setup) -> None:
     app, service, db = setup
     payload = {"action": "approve", "reason": "Reviewed package"}
@@ -182,11 +210,11 @@ async def test_injected_invalid_policy_is_sanitized() -> None:
     from fastapi import HTTPException
     from starlette.requests import Request
 
-    from src.api.paper_case_routes import get_reconciliation_settings
+    from src.api.paper_case_routes import get_base_reconciliation_settings
 
     app = FastAPI()
     app.state.paper_reconciliation_settings = {"override_codes": ["private-invalid-value"]}
     with pytest.raises(HTTPException) as error:
-        await get_reconciliation_settings(Request({"type": "http", "app": app}))
+        await get_base_reconciliation_settings(Request({"type": "http", "app": app}))
     assert error.value.status_code == 503
     assert "private-invalid-value" not in str(error.value.detail)

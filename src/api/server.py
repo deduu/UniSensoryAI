@@ -9,6 +9,10 @@ from src.api.paper_extraction_routes import router as paper_extraction_router
 from src.api.paper_routes import router as paper_router
 from src.api.paper_case_routes import router as paper_case_router
 from src.api.paper_case_routes import review_router as paper_review_router
+from src.api.paper_workspace_routes import router as paper_workspace_router
+from src.api.paper_document_draft_routes import router as paper_document_draft_router
+from src.api.paper_preparation_routes import router as paper_preparation_router
+from src.api.paper_field_policy_routes import router as paper_field_policy_router
 from src.api.rate_limit import RateLimitDep
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
@@ -214,6 +218,10 @@ app.include_router(paper_extraction_router)
 app.include_router(paper_router)
 app.include_router(paper_case_router)
 app.include_router(paper_review_router)
+app.include_router(paper_workspace_router)
+app.include_router(paper_document_draft_router)
+app.include_router(paper_preparation_router)
+app.include_router(paper_field_policy_router)
 
 @app.get("/")
 @app.get("/health")

@@ -77,6 +77,8 @@ include = ["src*"]
 [tool.setuptools.package-data]
 "src.extraction" = ["defaults.yaml"]
 "src.paper" = ["defaults.yaml"]
+"src.paper.association" = ["defaults.yaml"]
+"src.paper.parties" = ["defaults.yaml"]
 "src.paper.reconciliation" = ["defaults.yaml"]
 
 [[tool.uv.index]]

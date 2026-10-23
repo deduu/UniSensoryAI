@@ -28,6 +28,9 @@ from typing import Any
 
 import src.db.session as db_session
 from src.db.models.ingestion import IngestionStatus
+from src.extraction.cancelled_error import ExtractionCancelledError
+from src.extraction.contracts.usage import ExtractionUsage
+from src.extraction.errors import ExtractionError
 from src.ingestion.submission_cancelled_error import QueueSubmissionCancelledError
 from src.ingestion.submission_error import QueueSubmissionError
 from src.ingestion.workflow_recovery import recover_interrupted_workflow
@@ -250,9 +253,16 @@ class RedisIngestionQueue:
         """Process a consumed job and recover PAPER ownership during graceful cancellation."""
         try:
             await self._run_job(job_id, worker_id)
-        except asyncio.CancelledError:
+        except asyncio.CancelledError as error:
             await recover_interrupted_workflow(
-                job_id, self.requeue, service_factory=IngestionService
+                job_id,
+                self.requeue,
+                service_factory=IngestionService,
+                **(
+                    {"usage": error.usage_summary}
+                    if isinstance(error, ExtractionCancelledError)
+                    else {}
+                ),
             )
             raise
 
@@ -340,21 +350,38 @@ class RedisIngestionQueue:
 
             logger.info("Worker %d completed job %s", worker_id, job_id)
 
-        except asyncio.CancelledError:
+        except asyncio.CancelledError as error:
+            usage = error.usage_summary if isinstance(error, ExtractionCancelledError) else None
             if isinstance(result, QueuedWorkflowResult):
+                usage = usage or result.recorded_usage
                 await result.discard_uncommitted_artifact()
+            if usage is not None:
+                raise ExtractionCancelledError(usage) from None
             raise
         except Exception as e:
+            usage = e.usage_summary if isinstance(e, ExtractionError) else None
+            if usage is None and isinstance(result, QueuedWorkflowResult):
+                usage = result.recorded_usage
             if isinstance(result, QueuedWorkflowResult):
                 await result.discard_uncommitted_artifact()
             logger.exception("Worker %d failed job %s", worker_id, job_id)
             if meta.get("workflow"):
-                await self._handle_failure(job_id, str(e), workflow=meta["workflow"])
+                if usage is not None:
+                    await self._handle_failure(
+                        job_id, str(e), workflow=meta["workflow"], usage=usage
+                    )
+                else:
+                    await self._handle_failure(job_id, str(e), workflow=meta["workflow"])
             else:
                 await self._handle_failure(job_id, str(e))
 
     async def _handle_failure(
-        self, job_id: str, error_msg: str, *, workflow: str | None = None
+        self,
+        job_id: str,
+        error_msg: str,
+        *,
+        workflow: str | None = None,
+        usage: ExtractionUsage | None = None,
     ) -> None:
         """Handle job failure with exponential backoff and dead letter queue.
 
@@ -362,6 +389,17 @@ class RedisIngestionQueue:
             job_id: The failed job.
             error_msg: Error message to record.
         """
+        # Persist paid-call diagnostics before any retry delay or Redis I/O.
+        # Cancellation during backoff can then recover/requeue without losing
+        # the attempt that already completed; the next run resumes this ledger.
+        if usage is not None and db_session.session_manager is not None:
+            async with db_session.session_manager.session() as session:
+                await IngestionService(session).update_status(
+                    job_id,
+                    IngestionStatus.PROCESSING,
+                    {"usage": usage.model_dump(mode="json")},
+                )
+                await session.commit()
         r = await self._get_redis()
         retry_key = f"{self.retry_key_prefix}{job_id}"
 
@@ -386,7 +424,9 @@ class RedisIngestionQueue:
                 async with db_session.session_manager.session() as session:
                     service = IngestionService(session)
                     await service.mark_failed(
-                        job_id, f"Exceeded {MAX_RETRIES} retries: {error_msg}"
+                        job_id,
+                        f"Exceeded {MAX_RETRIES} retries: {error_msg}",
+                        **({"usage": usage} if usage is not None else {}),
                     )
                     await session.commit()
         else:
@@ -411,7 +451,12 @@ class RedisIngestionQueue:
                     service = IngestionService(session)
                     if workflow:
                         await service.update_status(
-                            job_id, IngestionStatus.PENDING, {"retry_count": retry_count}
+                            job_id,
+                            IngestionStatus.PENDING,
+                            {
+                                "retry_count": retry_count,
+                                **({"usage": usage.model_dump(mode="json")} if usage else {}),
+                            },
                         )
                     else:
                         await service.mark_failed(

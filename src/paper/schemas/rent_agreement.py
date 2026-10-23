@@ -1,16 +1,30 @@
 """Source-derived rent agreement terms, separate from reviewed classification."""
 
 from datetime import date
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import Field, JsonValue, TypeAdapter, field_validator, model_validator
+from pydantic import (
+    Field,
+    JsonValue,
+    StringConstraints,
+    TypeAdapter,
+    field_validator,
+    model_validator,
+)
 
 from ._base import _PaperSchema
 from ._types import Currency, DecimalString, Identity, PositiveInteger, Text
 from .installment_schedule import InstallmentSchedule
+from .party_roles import PartyRoles, party_roles_json_schema
 from .withholding_policy import WithholdingPolicy
 
 _RENT_BASIS: TypeAdapter[str | None] = TypeAdapter(Identity | None)
+_SourceNarrative = Annotated[
+    str,
+    StringConstraints(
+        strict=True, strip_whitespace=True, min_length=1, max_length=24000, pattern=r"\S"
+    ),
+]
 
 
 class RentAgreementSchema(_PaperSchema):
@@ -23,13 +37,18 @@ class RentAgreementSchema(_PaperSchema):
     extensions: dict[str, JsonValue] = Field(
         default_factory=dict,
         max_length=128,
-        description="Host-owned optional source attributes. When fixed_rent is extracted, also extract its source-supported pricing unit in fixed_rent_basis; omit it or use null if the source does not establish a basis. Do not infer a billing basis from installment timing. Extensions do not establish approval or classification.",
-        json_schema_extra={"properties": {"fixed_rent_basis": _RENT_BASIS.json_schema()}},
+        description="Host-owned optional source attributes. When fixed_rent is extracted, also extract its source-supported pricing unit in fixed_rent_basis; omit it or use null if the source does not establish a basis. Do not infer a billing basis from installment timing. When extracting parties, preserve the legal landlord and tenant separately in party_roles, including exact source role designations and complete representation chains across pages. Extensions do not establish approval or classification.",
+        json_schema_extra={
+            "properties": {
+                "fixed_rent_basis": _RENT_BASIS.json_schema(),
+                "party_roles": party_roles_json_schema(),
+            }
+        },
     )
 
     vendor_name: Identity | None = Field(
         default=None,
-        description="Legal landlord or rent supplier, not the tenant, notary, attorney, or signatory acting on their behalf; null if unknown.",
+        description="Legal landlord or rent supplier established by operative source role clauses and complete representation chains, not the tenant/customer, notary, attorney, or signatory acting on their behalf. Preserve parties separately in extensions.party_roles. Do not infer roles from first/second party order. Null if unknown or ambiguous.",
     )
     vendor_id: Identity | None = Field(
         default=None,
@@ -56,7 +75,7 @@ class RentAgreementSchema(_PaperSchema):
         default=None,
         description="Stated initial rental duration in whole months, excluding an unexercised renewal option; null if not determinable. Does not decide approved accounting classification.",
     )
-    payment_schedule: Text | None = Field(
+    payment_schedule: _SourceNarrative | None = Field(
         default=None,
         json_schema_extra={"x-source-text": True},
         description="For every cash installment, preserve the amount, due date, and ALL source payment prerequisites and contingent triggers: required signatures, handover or other events, receipt of complete invoices or tax/identity documents, and their submission deadlines. Preserve AND versus OR conditions, working versus calendar days, before versus after, and alternative dates. Do not reduce a conditional obligation to only a date or omit a document completeness requirement. Annual pricing does not imply annual installments; null if unknown.",
@@ -75,12 +94,12 @@ class RentAgreementSchema(_PaperSchema):
         description="Decimal fraction of revenue, for example 0.05 for 5%; null if the rate cannot be determined.",
     )
     minimum_guaranteed_payment: DecimalString | None = None
-    renewal_terms: Text | None = Field(
+    renewal_terms: _SourceNarrative | None = Field(
         default=None,
         json_schema_extra={"x-source-text": True},
         description="Preserve ALL stated renewal conditions: option duration, notice lead time and required form (including written notice when stated), mutually agreed price or price negotiation, and any required separate agreement or addendum. Do not reduce a contingent renewal to its duration, omit agreement conditions, or assume automatic exercise or accounting certainty.",
     )
-    other_key_terms: tuple[Text, ...] = Field(
+    other_key_terms: tuple[_SourceNarrative, ...] = Field(
         default=(),
         json_schema_extra={"x-source-text": True},
         max_length=128,
@@ -101,10 +120,17 @@ class RentAgreementSchema(_PaperSchema):
 
     @field_validator("extensions")
     @classmethod
-    def _validate_rent_basis(cls, value: dict[str, JsonValue]) -> dict[str, JsonValue]:
-        if "fixed_rent_basis" not in value:
-            return value
-        return {**value, "fixed_rent_basis": _RENT_BASIS.validate_python(value["fixed_rent_basis"])}
+    def _validate_extensions(cls, value: dict[str, JsonValue]) -> dict[str, JsonValue]:
+        normalized = dict(value)
+        if "fixed_rent_basis" in normalized:
+            normalized["fixed_rent_basis"] = _RENT_BASIS.validate_python(
+                normalized["fixed_rent_basis"]
+            )
+        if "party_roles" in normalized:
+            normalized["party_roles"] = PartyRoles.model_validate(
+                normalized["party_roles"]
+            ).model_dump(mode="json")
+        return normalized
 
     @model_validator(mode="after")
     def _validate_lease_dates(self) -> "RentAgreementSchema":

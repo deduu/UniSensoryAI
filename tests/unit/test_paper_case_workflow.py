@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock
 import pytest
 from pydantic import ValidationError
 
+from src.paper.association.service import AssociationService
 from src.paper.contracts import (
     AgreementActor,
     AgreementDraft,
@@ -135,8 +136,27 @@ def setup() -> _Setup:
     repository.list_latest.return_value = (case,)
     master = AsyncMock(spec=AgreementMasterService)
     master.find_approved.return_value = reference()
-    service = InvoiceCaseService(repository, master=master, engine=engine, settings=settings)
+    service = InvoiceCaseService(
+        repository,
+        master=master,
+        engine=engine,
+        settings=settings,
+        association=AssociationService(master),
+    )
     return service, repository, master, actor, case
+
+
+@pytest.mark.asyncio
+async def test_preview_resolves_authority_without_writing_any_case_history(setup: _Setup) -> None:
+    service, repository, master, actor, _ = setup
+    original = package()
+    confirmed, assessment = await service.preview_assessment(actor=actor, package=original)
+    assert confirmed == original
+    assert assessment.outcome == "matched"
+    assert master.find_approved.await_count == 2
+    repository.create.assert_not_awaited()
+    repository.append.assert_not_awaited()
+    repository.decide.assert_not_awaited()
 
 
 @pytest.mark.asyncio

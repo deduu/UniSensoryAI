@@ -3,6 +3,7 @@
 from typing import Literal
 
 from src.paper.contracts._base import Identifier, _Contract
+from src.paper.readiness.requirement import FieldRequirement
 
 
 class PaperReviewContext(_Contract):
@@ -28,6 +29,7 @@ class PaperReviewContext(_Contract):
     override_codes: tuple[Identifier, ...]
     policy_id: Identifier
     policy_version: Identifier
+    field_requirements: tuple[FieldRequirement, ...] = ()
     enabled_rules: tuple[Literal["installments", "withholding"], ...] = ()
     allow_withholding_without_vat_invoice: bool = False
     withholding_required_supporting_types: tuple[Identifier, ...] = ()

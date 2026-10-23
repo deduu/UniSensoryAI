@@ -2,8 +2,11 @@
 
 from pydantic import Field, model_validator
 
+from src.paper.association.confirmation import AssociationConfirmation
+from src.paper.association.selection import AssociationSelection
 from src.paper.contracts import AgreementIdentity
 from src.paper.contracts._base import _Contract
+from src.paper.preparation.selected_version import SelectedDocumentVersion
 
 from .rent_invoice_document import RentInvoiceDocument
 from .review_context import ReconciliationReviewContext
@@ -17,10 +20,12 @@ class InvoicePackage(_Contract):
 
     identity: AgreementIdentity
     invoice: RentInvoiceDocument
+    association: AssociationConfirmation | AssociationSelection | None = None
     review_context: ReconciliationReviewContext | None = None
     tax_invoices: tuple[TaxInvoiceDocument, ...] = Field(default=(), max_length=99)
     utility_statements: tuple[UtilityStatementDocument, ...] = Field(default=(), max_length=99)
     supporting_documents: tuple[SupportingDocument, ...] = Field(default=(), max_length=99)
+    document_draft_references: tuple[SelectedDocumentVersion, ...] = Field(default=(), max_length=100)
 
     @model_validator(mode="after")
     def _source_budget(self) -> "InvoicePackage":

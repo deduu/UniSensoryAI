@@ -10,6 +10,7 @@ from pydantic import ValidationError
 
 from src.api.auth import UserContext, get_user_context
 from src.api.paper_case_routes import (
+    get_base_reconciliation_settings,
     get_invoice_actor,
     get_reconciliation_settings,
     review_router,
@@ -128,6 +129,7 @@ async def test_review_context_uses_both_host_policies_and_actor_permissions() ->
     )
     app.dependency_overrides[get_paper_settings] = lambda: agreement_settings
     app.dependency_overrides[get_reconciliation_settings] = lambda: case_settings
+    app.dependency_overrides[get_base_reconciliation_settings] = lambda: case_settings
     app.dependency_overrides[get_paper_db] = lambda: db
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
@@ -147,6 +149,7 @@ async def test_review_context_uses_both_host_policies_and_actor_permissions() ->
         "override_codes": ["bank_mismatch"],
         "policy_id": "external.invoice_policy",
         "policy_version": "2026.2",
+        "field_requirements": [],
         "enabled_rules": [],
         "allow_withholding_without_vat_invoice": False,
         "withholding_required_supporting_types": ["withholding_certificate"],
@@ -176,6 +179,9 @@ async def test_review_context_resolves_persisted_tenant_roles(stored_tenant: str
     app.dependency_overrides[get_paper_db] = lambda: db
     app.dependency_overrides[get_paper_settings] = lambda: AgreementMasterSettings(
         approver_roles=("agreement-reviewer",)
+    )
+    app.dependency_overrides[get_base_reconciliation_settings] = lambda: ReconciliationSettings(
+        approver_roles=("accountant",)
     )
     app.dependency_overrides[get_reconciliation_settings] = lambda: ReconciliationSettings(
         approver_roles=("accountant",)

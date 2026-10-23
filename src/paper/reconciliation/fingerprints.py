@@ -20,7 +20,14 @@ def _model_fingerprint(model: BaseModel) -> str:
 
 def package_fingerprint(package: InvoicePackage) -> str:
     """Bind fields, source identifiers, diagnostics, and evidence in a package."""
-    return _model_fingerprint(InvoicePackage.model_validate(package))
+    package = InvoicePackage.model_validate(package)
+    payload = package.model_dump(mode="json", round_trip=True)
+    # Old snapshots predate association. Do not change their assessment binding.
+    if package.association is None:
+        payload.pop("association", None)
+    if not payload.get("document_draft_references"):
+        payload.pop("document_draft_references", None)
+    return _fingerprint(payload)
 
 
 def policy_fingerprint(
@@ -28,9 +35,13 @@ def policy_fingerprint(
 ) -> str:
     """Bind host settings and explicitly versioned injected rule implementations."""
     settings = ReconciliationSettings.model_validate(settings)
+    payload = settings.model_dump(mode="json", round_trip=True)
+    # Empty extension policy must retain the hash of existing saved assessments.
+    if not settings.field_requirements:
+        payload.pop("field_requirements", None)
     if not rule_versions:
-        return _model_fingerprint(settings)
-    return _fingerprint({"settings": settings.model_dump(mode="json"), "rules": rule_versions})
+        return _fingerprint(payload)
+    return _fingerprint({"settings": payload, "rules": rule_versions})
 
 
 def assessment_fingerprint(assessment: ReconciliationAssessment) -> str:

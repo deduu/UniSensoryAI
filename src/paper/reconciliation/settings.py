@@ -5,6 +5,7 @@ from typing import Annotated, Literal
 from pydantic import ConfigDict, Field, StringConstraints, model_validator
 
 from src.paper.contracts._base import Identifier, _Contract
+from src.paper.readiness.requirement import FieldRequirement
 from src.paper.schemas import RentInvoiceSchema, TaxInvoiceSchema
 
 _OVERRIDABLE_CODES = frozenset(
@@ -64,6 +65,7 @@ class ReconciliationSettings(_Contract):
         max_length=64,
     )
     required_supporting_types: tuple[Identifier, ...] = Field(default=(), max_length=64)
+    field_requirements: tuple[FieldRequirement, ...] = Field(default=(), max_length=128)
     fixed_rent_basis: Literal["approved_extension", "per_invoice", "monthly", "disabled"] = (
         "approved_extension"
     )
@@ -106,6 +108,9 @@ class ReconciliationSettings(_Contract):
                 raise ValueError("Policy requirements must not contain duplicates.")
         if not self.approver_roles:
             raise ValueError("At least one AP reviewer role is required.")
+        field_keys = [(item.role, item.field) for item in self.field_requirements]
+        if len(set(field_keys)) != len(field_keys):
+            raise ValueError("A role and field may have only one explicit requirement.")
         if (
             self.allow_withholding_without_vat_invoice
             and not self.withholding_required_supporting_types

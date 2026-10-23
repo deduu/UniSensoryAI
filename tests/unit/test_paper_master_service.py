@@ -123,6 +123,100 @@ async def test_missing_terms_can_be_draft_but_cannot_be_approved(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("require_all_identity_fields", [False, True])
+async def test_publication_uses_assigned_identity_without_fabricating_source_identifiers(
+    repository: AsyncMock, actor: AgreementActor, require_all_identity_fields: bool
+) -> None:
+    source_terms = draft().terms.model_copy(
+        update={"vendor_id": None, "store_id": None, "contract_number": None}
+    )
+    source_draft = draft(terms=source_terms)
+    snapshot = version(draft=source_draft)
+    before = snapshot.model_dump(mode="json")
+    repository.get_version.return_value = snapshot
+    approval = ApprovalRecord(
+        **decision().model_dump(), approved_by=actor.user_id, approved_at=datetime.now(timezone.utc)
+    )
+    repository.approve.return_value = version(draft=source_draft, approval=approval)
+    settings = AgreementMasterSettings()
+    if require_all_identity_fields:
+        settings = AgreementMasterSettings(
+            required_agreement_fields=(
+                *settings.required_agreement_fields,
+                "vendor_id",
+                "contract_number",
+            )
+        )
+
+    result = await AgreementMasterService(repository, settings=settings).approve(
+        actor=actor, agreement_id="agreement-1", version_number=1, decision=decision()
+    )
+
+    assert result.status == "approved"
+    assert result.identity == snapshot.identity
+    assert result.draft == source_draft
+    assert snapshot.model_dump(mode="json") == before
+    for name in ("vendor_id", "store_id", "contract_number"):
+        assert getattr(result.draft.terms, name) is None
+    repository.approve.assert_awaited_once_with(
+        agreement_id="agreement-1", version_number=1, decision=decision(), actor=actor
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("conflicting", ["vendor_id", "store_id", "contract_number"])
+async def test_publication_rejects_source_identifiers_conflicting_with_assigned_identity(
+    repository: AsyncMock, actor: AgreementActor, conflicting: str
+) -> None:
+    source_terms = draft().terms.model_copy(
+        update={"vendor_id": None, "store_id": None, "contract_number": None, conflicting: "other"}
+    )
+    repository.get_version.return_value = version(draft=draft(terms=source_terms))
+    with pytest.raises(AgreementMasterError, match="identity") as error:
+        await AgreementMasterService(repository).approve(
+            actor=actor, agreement_id="agreement-1", version_number=1, decision=decision()
+        )
+    assert error.value.code == "invalid_agreement"
+    repository.approve.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("missing", ["vendor_name", "payment_schedule", "currency", "fixed_rent"])
+async def test_assigned_identity_does_not_replace_missing_nonidentity_publication_terms(
+    repository: AsyncMock, actor: AgreementActor, missing: str
+) -> None:
+    source_terms = draft().terms.model_copy(
+        update={"vendor_id": None, "store_id": None, "contract_number": None, missing: None}
+    )
+    repository.get_version.return_value = version(draft=draft(terms=source_terms))
+    with pytest.raises(AgreementMasterError, match="Required agreement terms") as error:
+        await AgreementMasterService(repository).approve(
+            actor=actor, agreement_id="agreement-1", version_number=1, decision=decision()
+        )
+    assert error.value.code == "invalid_approval"
+    repository.approve.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_assigned_identity_does_not_bypass_retained_warning_acknowledgement(
+    repository: AsyncMock, actor: AgreementActor
+) -> None:
+    source_terms = draft().terms.model_copy(update={"store_id": None})
+    repository.get_version.return_value = version(
+        draft=draft(
+            terms=source_terms,
+            extraction_warnings=(ExtractionIssue(code="review", message="Review source."),),
+        )
+    )
+    with pytest.raises(AgreementMasterError, match="warnings require explicit") as error:
+        await AgreementMasterService(repository).approve(
+            actor=actor, agreement_id="agreement-1", version_number=1, decision=decision()
+        )
+    assert error.value.code == "invalid_approval"
+    repository.approve.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_approval_requires_explicit_authority(repository: AsyncMock) -> None:
     member = AgreementActor(tenant_id="tenant-1", user_id="member")
     with pytest.raises(AgreementMasterError) as error:

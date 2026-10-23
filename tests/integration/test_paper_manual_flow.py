@@ -23,6 +23,71 @@ _Client = tuple[httpx.AsyncClient, dict[str, UserContext]]
 
 
 @pytest.mark.asyncio
+async def test_contract_association_is_durable_without_rewriting_source_values(
+    client: _Client,
+) -> None:
+    http, _ = client
+    agreement_id = await _approved_master(http)
+    body = package().model_dump(mode="json")
+    for field in ("vendor_id", "store_id", "contract_number"):
+        body["invoice"]["fields"][field] = None
+    search = await http.post(
+        "/v1/paper/cases/association/candidates",
+        json={"invoice": body["invoice"]},
+    )
+    assert search.status_code == 200
+    assert search.json()["requires_confirmation"] is True
+    assert search.json()["candidates"][0]["agreement_id"] == agreement_id
+    body["association"] = {
+        "agreement_id": agreement_id,
+        "version_number": 1,
+        "reason": "Reviewed supplier and premises against original documents.",
+    }
+    created = await http.post("/v1/paper/cases", json=body)
+    assert created.status_code == 201, created.text
+    result = created.json()
+    assert result["status"] == "matched"
+    assert result["package"]["invoice"] == body["invoice"]
+    confirmed = result["package"]["association"]
+    assert confirmed["confirmed_by"] == "reviewer-a"
+    case_id = result["case_id"]
+    read = await http.get(f"/v1/paper/cases/{case_id}/versions/1")
+    assert read.json()["package"]["association"] == confirmed
+    assert read.json()["package"]["invoice"]["fields"]["vendor_id"] is None
+    unchanged = await http.post(
+        f"/v1/paper/cases/{case_id}/versions",
+        json={"expected_version": 1, "package": result["package"]},
+    )
+    assert unchanged.status_code == 201, unchanged.text
+    assert unchanged.json()["package"]["association"] == confirmed
+    changed = unchanged.json()["package"]
+    changed["invoice"]["fields"]["description"] = "Corrected source transcription"
+    stale = await http.post(
+        f"/v1/paper/cases/{case_id}/versions",
+        json={"expected_version": 2, "package": changed},
+    )
+    assert stale.status_code == 409
+    changed["association"] = body["association"]
+    revised = await http.post(
+        f"/v1/paper/cases/{case_id}/versions",
+        json={"expected_version": 2, "package": changed},
+    )
+    assert revised.status_code == 201, revised.text
+    assert (
+        revised.json()["package"]["association"]["invoice_fingerprint"]
+        != confirmed["invoice_fingerprint"]
+    )
+    approved = await http.post(
+        f"/v1/paper/cases/{case_id}/versions/3/decision",
+        json={"action": "approve", "reason": "Reviewed separately from association confirmation"},
+    )
+    assert approved.status_code == 200, approved.text
+    assert approved.json()["status"] == "approved"
+    original = await http.get(f"/v1/paper/cases/{case_id}/versions/1")
+    assert original.json()["package"]["association"] == confirmed
+
+
+@pytest.mark.asyncio
 async def test_installment_withholding_full_flow_requires_evidence_and_explicit_ap_review(
     client: _Client,
     monkeypatch: pytest.MonkeyPatch,

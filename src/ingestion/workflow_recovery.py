@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 import src.db.session as db_session
 from src.db.models.ingestion import IngestionStatus
+from src.extraction.contracts.usage import ExtractionUsage
 from src.services.ingestion import IngestionService
 
 logger = structlog.get_logger(__name__)
@@ -18,6 +19,7 @@ async def recover_interrupted_workflow(
     requeue: Callable[[str], Awaitable[None]],
     *,
     service_factory: Callable[[AsyncSession], IngestionService],
+    usage: ExtractionUsage | None = None,
 ) -> None:
     """Commit a safe pending handoff, or retain an explicit failed interruption.
 
@@ -25,6 +27,7 @@ async def recover_interrupted_workflow(
         job_id: Persisted ID that the stopping worker had already consumed.
         requeue: Backend-specific publication operation, without creating another job.
         service_factory: Existing job service constructor injected for the host session.
+        usage: Optional completed and interrupted attempt ledger to preserve on retry.
     """
     manager = db_session.session_manager
     if manager is None:
@@ -41,7 +44,14 @@ async def recover_interrupted_workflow(
                 or job.status not in {IngestionStatus.PROCESSING, IngestionStatus.PENDING}
             ):
                 return False
-            await service.update_status(job_id, IngestionStatus.PENDING, {"interrupted": True})
+            await service.update_status(
+                job_id,
+                IngestionStatus.PENDING,
+                {
+                    "interrupted": True,
+                    **({"usage": usage.model_dump(mode="json")} if usage else {}),
+                },
+            )
             await session.commit()
         await requeue(job_id)
         return True
@@ -62,6 +72,7 @@ async def recover_interrupted_workflow(
                     await service.mark_failed(
                         job_id,
                         "Processing was interrupted before completion. Retry the stored upload.",
+                        **({"usage": usage} if usage is not None else {}),
                     )
                     await session.commit()
 

@@ -1,0 +1,10 @@
+policy_id: paper.party_roles
+policy_version: '1'
+landlord_labels:
+  - YANG MENYEWAKAN
+  - LESSOR
+  - LANDLORD
+tenant_labels:
+  - PENYEWA
+  - LESSEE
+  - TENANT

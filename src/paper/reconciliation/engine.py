@@ -6,9 +6,17 @@ from typing import Literal
 
 from pydantic import TypeAdapter, ValidationError
 
+from src.paper.association.confirmation import AssociationConfirmation
+from src.paper.association.fingerprints import invoice_fingerprint
 from src.paper.contracts import AgreementVersion
 from src.paper.contracts._base import Identifier
 from src.paper.errors import AgreementMasterError
+from src.paper.readiness._schemas import DocumentRole
+from src.paper.readiness.requirements import (
+    documents_by_role,
+    required_field_names,
+    requirement_active,
+)
 from src.paper.schemas import RentInvoiceSchema
 
 from .billing import billing_period
@@ -137,6 +145,13 @@ class ReconciliationEngine:
         agreement = self._authority(
             package, agreement_start, agreement_end, tenant_id, authority_findings
         )
+        if package.association is not None and not self._confirmed_association(package, agreement):
+            findings.add(
+                "contract_association_invalid",
+                "Contract association is unconfirmed, changed, or disagrees with approved authority.",
+                sources=(package.invoice.source_document_id,),
+                field_path="/association",
+            )
         self._requirements(package, findings, agreement)
         findings.values.extend(authority_findings.values)
         self._rule_guards(package, agreement, findings)
@@ -201,15 +216,28 @@ class ReconciliationEngine:
                 "Explicit payment components require an installed versioned withholding rule.",
             )
 
+    @staticmethod
+    def _confirmed_association(
+        package: InvoicePackage,
+        agreement: AgreementVersion | None,
+    ) -> bool:
+        association = package.association
+        return isinstance(association, AssociationConfirmation) and (
+            association.invoice_fingerprint
+            == invoice_fingerprint(package.invoice, package.review_context)
+            and (
+                agreement is None
+                or (
+                    association.agreement_id == agreement.agreement_id
+                    and association.version_number == agreement.version_number
+                )
+            )
+        )
+
     def _requirements(
         self, package: InvoicePackage, findings: _Findings, agreement: AgreementVersion | None
     ) -> None:
-        roles = {
-            "rent_invoice": (package.invoice,),
-            "tax_invoice": package.tax_invoices,
-            "utility_statement": package.utility_statements,
-            "supporting_document": package.supporting_documents,
-        }
+        roles = documents_by_role(package)
         invoice = package.invoice.fields
         withholding_evidence = (
             self._settings.allow_withholding_without_vat_invoice
@@ -222,12 +250,33 @@ class ReconciliationEngine:
             and Decimal(invoice.withholding_amount) > 0
         )
         for role in self._settings.required_documents:
-            if role == "tax_invoice" and withholding_evidence:
+            if (
+                role == "tax_invoice"
+                and withholding_evidence
+                and not any(
+                    item.role == role and requirement_active(item, package)
+                    for item in self._settings.field_requirements
+                )
+            ):
                 continue
             if not roles[role]:
                 findings.add(
                     "missing_document",
                     "A required document role is missing.",
+                    field_path=f"/{role}",
+                )
+        for role in ("tax_invoice", "utility_statement", "supporting_document"):
+            if (
+                role not in self._settings.required_documents
+                and not roles[role]
+                and any(
+                    item.role == role and requirement_active(item, package)
+                    for item in self._settings.field_requirements
+                )
+            ):
+                findings.add(
+                    "missing_document",
+                    "An active field requirement needs a selected document of this role.",
                     field_path=f"/{role}",
                 )
         types = {document.fields.document_type for document in package.supporting_documents}
@@ -245,13 +294,21 @@ class ReconciliationEngine:
         invoice_fields = tuple(
             dict.fromkeys(
                 (
-                    *self._settings.required_invoice_fields,
+                    *required_field_names(self._settings, "rent_invoice", package, package.invoice),
                     "service_period_start",
                     "service_period_end",
                 )
             )
         )
         for name in invoice_fields:
+            if (
+                name in ("vendor_id", "store_id", "contract_number")
+                and self._confirmed_association(package, agreement)
+                and getattr(package.invoice.fields, name) is None
+            ):
+                # Assigned master IDs satisfy this routing requirement without
+                # pretending the source PDF printed those internal identifiers.
+                continue
             if (
                 name in ("service_period_start", "service_period_end")
                 and package.review_context is not None
@@ -277,7 +334,7 @@ class ReconciliationEngine:
                     field_path=f"/invoice/fields/{name}",
                 )
         for index, tax in enumerate(package.tax_invoices):
-            for name in self._settings.required_tax_fields:
+            for name in required_field_names(self._settings, "tax_invoice", package, tax):
                 value = getattr(tax.fields, name)
                 if value is None or value == "" or value == () or value == {}:
                     findings.add(
@@ -286,17 +343,32 @@ class ReconciliationEngine:
                         sources=(tax.source_document_id,),
                         field_path=f"/tax_invoices/{index}/fields/{name}",
                     )
-        for document in (
+        extra_roles: dict[DocumentRole, str] = {
+            "utility_statement": "utility_statements",
+            "supporting_document": "supporting_documents",
+        }
+        for role, path in extra_roles.items():
+            for index, document in enumerate(roles[role]):
+                for name in required_field_names(self._settings, role, package, document):
+                    value = getattr(document.fields, name)
+                    if value is None or value == "" or value == () or value == {}:
+                        findings.add(
+                            "missing_field",
+                            "An active host requirement needs this source document field.",
+                            sources=(document.source_document_id,),
+                            field_path=f"/{path}/{index}/fields/{name}",
+                        )
+        for warning_document in (
             package.invoice,
             *package.tax_invoices,
             *package.utility_statements,
             *package.supporting_documents,
         ):
-            if document.warnings:
+            if warning_document.warnings:
                 findings.add(
                     "extraction_warnings",
                     "Extraction diagnostics require reviewer acknowledgement.",
-                    sources=(document.source_document_id,),
+                    sources=(warning_document.source_document_id,),
                     severity="review",
                 )
 

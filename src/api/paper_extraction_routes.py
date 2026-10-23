@@ -33,7 +33,12 @@ from src.extraction.contracts import ExtractionOptions
 from src.ingestion.queue_manager import get_ingestion_queue
 from src.ingestion.submission_cancelled_error import QueueSubmissionCancelledError
 from src.ingestion.submission_error import QueueSubmissionError
-from src.paper.extraction_contracts import PaperExtractionJob, PaperExtractionParameters
+from src.paper.extraction_archive_error import PaperExtractionArchiveError
+from src.paper.extraction_contracts import (
+    ExtractionArchiveRequest,
+    PaperExtractionJob,
+    PaperExtractionParameters,
+)
 from src.services.base_pdf_page_preview import BasePdfPagePreview
 from src.services.paper_extraction_history import PaperExtractionHistoryService
 from src.services.pdf_page_preview import PdfPagePreviewService
@@ -49,6 +54,9 @@ router = APIRouter(
     dependencies=[Depends(_rate_limit)],
 )
 JobId = Annotated[str, fastapi.Path(min_length=1, max_length=50, pattern=r"^[A-Za-z0-9-]+$")]
+DocumentId = Annotated[
+    str, fastapi.Path(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$")
+]
 PageNumber = Annotated[int, fastapi.Path(ge=1, le=500)]
 
 
@@ -224,10 +232,68 @@ async def list_extractions(
     history: Annotated[PaperExtractionHistoryService, Depends(get_history_service)],
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
+    archived: bool = False,
 ) -> tuple[PaperExtractionJob, ...]:
-    """List durable tenant upload metadata without downloading source contents."""
+    """List active attempts by default, or explicitly list recoverable archived attempts."""
     with _storage_errors():
-        return await history.list_jobs(user.tenant_id, limit=limit, offset=offset)
+        return await history.list_jobs(
+            user.tenant_id, limit=limit, offset=offset, archived=archived
+        )
+
+
+@router.post(
+    "/archive", response_model=tuple[PaperExtractionJob, ...], response_model_exclude_none=True
+)
+async def archive_extractions(
+    body: ExtractionArchiveRequest,
+    user: Annotated[UserContext, Depends(get_user_context)],
+    history: Annotated[PaperExtractionHistoryService, Depends(get_history_service)],
+    db: Annotated[AsyncSession, Depends(_db_session)],
+) -> tuple[PaperExtractionJob, ...]:
+    """Archive or restore terminal attempts while retaining all source and audit data.
+
+    Args:
+        body: Explicit job targets and desired archive state; no tenant override.
+        user: Authenticated tenant and actor used for every target and audit stamp.
+        history: Existing extraction repository, retaining all original artifacts.
+        db: Shared transaction committed only after the complete batch validates.
+
+    Returns:
+        Updated lightweight metadata, with archive and restore audit information.
+    """
+    with _storage_errors():
+        try:
+            result = await history.set_archived(body, user.tenant_id, user_id=user.user_id)
+        except PaperExtractionArchiveError as error:
+            raise HTTPException(
+                status_code=404 if error.code == "not_found" else 409,
+                detail={"code": error.code, "message": str(error)},
+            ) from None
+        await asyncio.wait_for(db.commit(), timeout=15)
+        return result
+
+
+@router.get("/by-document/{document_id}", response_model=PaperExtractionJob)
+async def read_extraction_by_document(
+    document_id: DocumentId,
+    user: Annotated[UserContext, Depends(get_user_context)],
+    history: Annotated[PaperExtractionHistoryService, Depends(get_history_service)],
+) -> PaperExtractionJob:
+    """Resolve an exact canonical document identity to its stored source extraction.
+
+    Args:
+        document_id: Canonical extraction identity, independent of job and DB IDs.
+        user: Authenticated tenant, never accepted from request query fields.
+        history: Tenant-scoped persisted extraction history adapter.
+
+    Returns:
+        Newest readable matching extraction with original content and citations.
+    """
+    with _storage_errors():
+        result = await history.read_by_document(document_id, user.tenant_id)
+    if result is None:
+        raise _not_found()
+    return result
 
 
 @router.get("/{job_id}", response_model=PaperExtractionJob)

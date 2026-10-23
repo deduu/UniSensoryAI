@@ -1,6 +1,9 @@
 # Host-owned deterministic rules. No model/provider configuration belongs here.
 policy_id: paper.manual_reconciliation
 policy_version: "2"
+# Optional field_requirements entries configure required/conditional/optional presence.
+# See documentation/PAPER_UI_TESTING.md: Saved document drafts and case readiness.
+# Change policy_version whenever activating or changing these requirements.
 enabled_rules: [installments, withholding]
 # Only an approved withholding policy with explicit zero VAT can use this path.
 # Required evidence replaces the VAT document requirement; it is not fabricated.

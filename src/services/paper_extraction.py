@@ -9,12 +9,21 @@ from uuid import uuid4
 
 import structlog
 
+from src.extraction.cancelled_error import ExtractionCancelledError
 from src.extraction.contracts import ExtractionIssue, ExtractionOptions, PdfSource
+from src.extraction.contracts.usage import ExtractionUsage
 from src.extraction.errors import ExtractionError
 from src.extraction.service import ExtractionService
+from src.extraction.usage import UsageCollector, capture_model_usage
 from src.ingestion.workflow_result import QueuedWorkflowResult
 from src.paper.extraction_contracts import PaperExtractionParameters, PaperExtractionResult
+from src.paper.parties import (
+    BasePartyRoleValidator,
+    DeterministicPartyRoleValidator,
+    load_party_role_settings,
+)
 from src.paper.schemas import get_paper_schema
+from src.services.paper_party_extraction import AgreementPartyExtractor, unresolved_party_roles
 from src.services.upload_storage import get_upload_directory, resolve_upload_path
 
 logger = structlog.get_logger(__name__)
@@ -43,17 +52,20 @@ class PaperExtractionProcessor:
         service_factory: Callable[[], Awaitable[ExtractionService]],
         *,
         options: ExtractionOptions | None = None,
+        party_role_validator: BasePartyRoleValidator | None = None,
     ) -> None:
         """Receive a shared-service factory and validated deployment resource budgets.
 
         Args:
             service_factory: Lazy host factory that owns provider configuration.
             options: Immutable extraction settings; default document budget is 300 seconds.
+            party_role_validator: Optional host-owned source-role policy.
         """
         self._service_factory = service_factory
         self._options = ExtractionOptions.model_validate(
             options if options is not None else ExtractionOptions()
         )
+        self._party_role_validator = party_role_validator
 
     async def process(self, file_path: str, metadata: dict[str, Any]) -> QueuedWorkflowResult:
         """Extract a PDF, then apply its external PAPER schema, retaining partial output.
@@ -68,6 +80,28 @@ class PaperExtractionProcessor:
         Raises:
             ExtractionError: Document acquisition failed; public errors contain no values.
         """
+        previous = (
+            ExtractionUsage.model_validate(metadata["usage"]) if metadata.get("usage") else None
+        )
+        with capture_model_usage(previous) as meter:
+            try:
+                return await self._process(file_path, metadata, meter)
+            except asyncio.CancelledError:
+                raise ExtractionCancelledError(meter.snapshot()) from None
+            except ExtractionError as error:
+                raise ExtractionError(
+                    error.code, str(error), usage_summary=meter.snapshot()
+                ) from None
+            except Exception:  # noqa: BLE001 - paid-call metadata must survive storage failures
+                raise ExtractionError(
+                    "extraction_unavailable",
+                    "Document extraction could not be completed.",
+                    usage_summary=meter.snapshot(),
+                ) from None
+
+    async def _process(
+        self, file_path: str, metadata: dict[str, Any], meter: UsageCollector
+    ) -> QueuedWorkflowResult:
         parameters = PaperExtractionParameters.model_validate(
             {key: value for key, value in metadata.items() if key in _INPUT_KEYS}
         )
@@ -100,6 +134,20 @@ class PaperExtractionProcessor:
                 model_profile=options.fields_profile,
                 timeout_seconds=options.timeout_seconds,
             )
+            if parameters.schema_name == "rent_agreement":
+                try:
+                    validator = self._party_role_validator
+                    if validator is None:
+                        configured = os.getenv("PAPER_PARTY_ROLES_CONFIG_PATH")
+                        validator = DeterministicPartyRoleValidator(
+                            await load_party_role_settings(Path(configured) if configured else None)
+                        )
+                except ValueError:
+                    fields = unresolved_party_roles(fields)
+                    raise
+                fields = await AgreementPartyExtractor(service, validator=validator).enrich(
+                    document, fields, options
+                )
         except ExtractionError as error:
             warnings = (
                 ExtractionIssue(
@@ -116,7 +164,10 @@ class PaperExtractionProcessor:
                 ),
             )
             logger.warning("paper_fields_incomplete", error_code="field_extraction_failed")
-        result = PaperExtractionResult(document=document, fields=fields, warnings=warnings)
+        usage = meter.snapshot()
+        result = PaperExtractionResult(
+            document=document, fields=fields, warnings=warnings, usage=usage
+        )
         # Resolve the creator-owned directory before writing. A cancelled caller
         # must wait for its thread and remove output before the worker hands off.
         artifact_root = await asyncio.to_thread(get_upload_directory().resolve)
@@ -158,11 +209,13 @@ class PaperExtractionProcessor:
                     }
                 ],
                 "job_metadata": {
+                    "document_id": document.document_id,
                     "model_ids": model_ids,
                     **({"model_id": model_ids[0]} if len(model_ids) == 1 else {}),
                     "page_count": document.page_count,
                     "warning_count": warning_count,
                     "extraction_status": result.status,
+                    "usage": usage.model_dump(mode="json"),
                 },
             },
             discard=discard_artifact,

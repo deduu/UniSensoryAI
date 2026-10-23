@@ -17,12 +17,14 @@ from src.paper.contracts import (
 )
 from src.paper.contracts._base import Identifier, _Contract
 from src.paper.errors import AgreementMasterError
+from src.paper.parties import BasePartyRoleValidator, DeterministicPartyRoleValidator
 from src.paper.ports import BaseAgreementRepository
 from src.paper.settings import AgreementMasterSettings
 
 _T = TypeVar("_T")
 _identifier = TypeAdapter(Identifier)
 _logger = structlog.get_logger(__name__)
+_IDENTITY_FIELDS = ("vendor_id", "store_id", "contract_number")
 
 
 class _VersionReference(_Contract):
@@ -43,17 +45,20 @@ class AgreementMasterService:
         repository: BaseAgreementRepository,
         *,
         settings: AgreementMasterSettings | None = None,
+        party_role_validator: BasePartyRoleValidator | None = None,
     ) -> None:
         """Inject storage and publication policy.
 
         Args:
             repository: Adapter with tenant-scoped, atomic persistence operations.
             settings: Host-owned policy; no model is constructed by this service.
+            party_role_validator: Injected source-role policy, independent of models.
         """
         self._repository = repository
         self._settings = AgreementMasterSettings.model_validate(
             (settings or AgreementMasterSettings()).model_dump(mode="json")
         )
+        self._party_role_validator = party_role_validator or DeterministicPartyRoleValidator()
 
     async def _run(self, operation: Awaitable[_T]) -> _T:
         try:
@@ -65,7 +70,7 @@ class AgreementMasterService:
 
     @staticmethod
     def _check_identity(identity: AgreementIdentity, draft: AgreementDraft) -> None:
-        for field in ("vendor_id", "store_id", "contract_number"):
+        for field in _IDENTITY_FIELDS:
             extracted = getattr(draft.terms, field)
             if extracted is not None and extracted != getattr(identity, field):
                 raise AgreementMasterError(
@@ -127,6 +132,15 @@ class AgreementMasterService:
             version_number=reference.version_number,
         )
         self._check_identity(previous.identity, draft)
+        if (
+            "party_roles" in previous.draft.terms.extensions
+            and "party_roles" not in draft.terms.extensions
+        ):
+            raise AgreementMasterError(
+                "invalid_agreement",
+                "Saved party roles must remain available across revisions; "
+                "retain and correct the source roles rather than removing them.",
+            )
         previous_schedule = previous.draft.terms.installment_schedule
         if previous_schedule is not None:
             retained_ids = (
@@ -167,6 +181,9 @@ class AgreementMasterService:
     ) -> AgreementVersion:
         """Publish the current snapshot with an explicit accounting decision.
 
+        Assigned identity satisfies identifier presence without populating absent
+        source identifiers. Any contradictory extracted identifier is rejected.
+
         Args:
             actor: Host-authorized approver identity.
             agreement_id: Agreement to publish.
@@ -189,14 +206,42 @@ class AgreementMasterService:
             raise AgreementMasterError(
                 "forbidden", "An independent agreement approver is required."
             )
-        self._check_identity(current.identity, current.draft)
+        identity = AgreementIdentity.model_validate(current.identity)
+        self._check_identity(identity, current.draft)
         required = self._settings.required_agreement_fields
         if current.draft.terms.rent_type:
             required += self._settings.required_fields_by_rent_type.get(
                 current.draft.terms.rent_type, ()
             )
-        if any(getattr(current.draft.terms, name) in (None, "", (), [], {}) for name in required):
+        if any(
+            getattr(identity if name in _IDENTITY_FIELDS else current.draft.terms, name)
+            in (None, "", (), [], {})
+            for name in required
+        ):
             raise AgreementMasterError("invalid_approval", "Required agreement terms are missing.")
+        if "party_roles" in current.draft.terms.extensions:
+            issues = self._party_role_validator.validate(
+                current.draft.terms,
+                tuple(
+                    item.evidence
+                    for item in current.draft.evidence
+                    if item.document_id in current.draft.source_document_ids
+                ),
+            )
+            if any(issue.code != "party_roles_review_required" for issue in issues):
+                raise AgreementMasterError(
+                    "invalid_approval",
+                    "Party roles or their source evidence remain unresolved; "
+                    "correct the draft before approval.",
+                )
+            if not decision.acknowledge_party_roles:
+                raise AgreementMasterError(
+                    "invalid_approval",
+                    "Party roles require explicit review acknowledgement before publication.",
+                )
+        elif decision.acknowledge_party_roles:
+            # An old draft has no roles to review; never create a misleading audit.
+            decision = decision.model_copy(update={"acknowledge_party_roles": False})
         if current.draft.extraction_warnings and not decision.acknowledge_extraction_warnings:
             raise AgreementMasterError(
                 "invalid_approval", "Extraction warnings require explicit review acknowledgement."
