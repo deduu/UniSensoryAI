@@ -6,7 +6,7 @@ export function jobScope(user, backendUrl = '') {
 }
 
 export function jobsForScope(state, scope) {
-  return scope && state.scope === scope ? state.jobs : []
+  return scope && state.scope === scope ? state.jobs.filter(job => !(job.meta?.workflow === 'paper_extraction' && job.meta?.archived === true)) : []
 }
 
 /** Reconcile an asynchronous server snapshot without losing concurrent user actions. */
@@ -19,7 +19,8 @@ export function reconcileHistorySnapshot(previous, records, addedDuringRequest, 
 /** Keep only display metadata; credentials never enter the shared UI job cache. */
 export function normalizeHistoryJob(job) {
   const basename = job.file_path?.split(/[/\\]/).pop()?.replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_/i, '')
-  const meta = Object.fromEntries(['model_id', 'model_ids', 'file_size', 'error', 'workflow', 'schema_name', 'content_mode', 'retry_of', 'start_page', 'end_page', 'page_count', 'warning_count', 'extraction_status'].filter(key => job.meta?.[key] !== undefined).map(key => [key, job.meta[key]]))
+  const meta = Object.fromEntries(['model_id', 'model_ids', 'file_size', 'error', 'workflow', 'schema_name', 'content_mode', 'retry_of', 'start_page', 'end_page', 'page_count', 'warning_count', 'extraction_status', 'archived'].filter(key => job.meta?.[key] !== undefined).map(key => [key, job.meta[key]]))
+  if (job.meta?.paper_archive) meta.archived = job.meta.paper_archive.archived === true
   const ids = modelIds(job)
   return {
     job_id: job.job_id, status: job.status?.toLowerCase(), filename: job.filename || job.meta?.original_filename || basename || job.job_id,

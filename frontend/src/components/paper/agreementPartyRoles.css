@@ -1,0 +1,110 @@
+.paper-party-review {
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid rgb(var(--surface-border));
+  border-radius: 0.75rem;
+  background: rgb(var(--surface));
+  color: rgb(var(--ink));
+}
+
+.paper-party-review > header,
+.paper-party-card-title,
+.paper-party-field-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.paper-party-review :is(h3, h4, h5) {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.paper-party-review > p,
+.paper-party-empty-chain {
+  margin: 0.65rem 0;
+  color: rgb(var(--ink-muted));
+  font-size: 0.75rem;
+  line-height: 1.65;
+}
+
+.paper-party-needs-review,
+.paper-party-reviewed {
+  padding: 0.25rem 0.5rem;
+  border-radius: 1rem;
+  background: rgb(var(--surface-muted));
+  font-size: 0.6875rem;
+  font-weight: 600;
+}
+
+.paper-party-needs-review {
+  color: #b45309;
+}
+
+.dark .paper-party-needs-review {
+  color: #fbbf24;
+}
+
+.paper-party-supplier,
+.paper-party-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 0.85rem;
+  margin-top: 0.85rem;
+}
+
+.paper-party-supplier {
+  padding: 0.8rem;
+  border-radius: 0.5rem;
+  background: rgb(var(--surface-muted));
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
+}
+
+.paper-party-supplier strong,
+.paper-party-supplier span {
+  display: block;
+  font-size: 0.6875rem;
+  color: rgb(var(--ink-muted));
+}
+
+.paper-party-supplier p {
+  margin: 0.3rem 0;
+}
+
+.paper-party-card {
+  min-width: 0;
+  padding: 0.85rem;
+  border: 1px solid rgb(var(--surface-border));
+  border-radius: 0.6rem;
+}
+
+.paper-party-field {
+  min-width: 0;
+  margin-top: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.paper-party-field-heading {
+  margin-bottom: 0.3rem;
+  color: rgb(var(--ink-muted));
+  font-size: 0.6875rem;
+}
+
+.paper-party-field p {
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.paper-party-representatives {
+  margin-top: 1rem;
+}
+
+.paper-party-representative {
+  border-inline-start: 2px solid rgb(var(--surface-border));
+  margin-top: 0.7rem;
+  padding-inline-start: 0.7rem;
+}

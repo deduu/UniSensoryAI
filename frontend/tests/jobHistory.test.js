@@ -2,6 +2,16 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { jobScope, jobsForScope, normalizeHistoryJob, discardLegacyJobCache, reconcileHistorySnapshot } from '../src/jobs/history.js'
 
+test('archived PAPER attempts leave active upload history while ordinary jobs remain visible', () => {
+  const scope = 'tenant-scope'
+  const archived = normalizeHistoryJob({ job_id: 'old', meta: { workflow: 'paper_extraction', paper_archive: { archived: true, irrelevant: 'discard me' } } })
+  const current = normalizeHistoryJob({ job_id: 'new', meta: { workflow: 'paper_extraction', archived: false } })
+  const other = normalizeHistoryJob({ job_id: 'ordinary', meta: { archived: true } })
+  assert.deepEqual(jobsForScope({ scope, jobs: [archived, current, other] }, scope).map(job => job.job_id), ['new', 'ordinary'])
+  assert.equal(archived.meta.archived, true)
+  assert.equal(archived.meta.paper_archive, undefined)
+})
+
 test('job histories are invisible across tenants, accounts, backends and logout', () => {
   const a = jobScope({ user_id: 'reviewer', tenant_id: 'tenant-a' }, '')
   const state = { scope: a, jobs: [{ job_id: 'private' }] }

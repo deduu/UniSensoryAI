@@ -5,6 +5,16 @@ import { reviewEligibility, uniqueFindingCodes, replacePackage, applyPackageIden
 const context = { can_decide_cases: true, user_id: 'reviewer', override_codes: ['bank_mismatch'] }
 const version = { version_number: 2, created_by: 'author', assessment: { findings: [], agreement_reference: { agreement_id: 'ref' } } }
 
+test('saved assessment requires reassessment after the active field policy changes', () => {
+  const old = { ...version, assessment: { ...version.assessment, policy_id: 'policy', policy_version: 'v1' } }
+  const current = { ...context, policy_id: 'policy', policy_version: 'v2' }
+  const eligibility = reviewEligibility(old, 2, current)
+  assert.equal(eligibility.canApprove, false)
+  assert.equal(eligibility.canDecide, false)
+  assert.match(eligibility.reason, /requirements.*changed|policy.*changed/i)
+  assert.equal(reviewEligibility(old, 2, { ...current, policy_version: 'v1' }).canApprove, true)
+})
+
 test('approval requires a current undecided version and authoritative agreement', () => {
   assert.equal(reviewEligibility(version, 2, context).canApprove, true)
   assert.equal(reviewEligibility(version, 3, context).canApprove, false)
@@ -40,16 +50,17 @@ test('replacement import clears omitted document collections without touching pr
   assert.equal(imported.invoice.evidence[0].page, 1)
 })
 
-test('explicit identity handoff updates sample or unknown fields while retaining true discrepancies', () => {
+test('identity assignment never copies master IDs into extracted document fields', () => {
   const old = { vendor_id: 'v1', store_id: 's1', contract_number: 'c1' }
   const identity = { vendor_id: 'v2', store_id: 's2', contract_number: 'c2' }
   const pkg = { identity: old, invoice: { fields: { ...old, invoice_number: '001' } }, tax_invoices: [{ fields: { ...old, vendor_id: 'other-source-vendor' }, evidence: [{ quote: 'retained' }] }], supporting_documents: [{ fields: {} }] }
   const result = applyPackageIdentity(pkg, identity)
-  assert.equal(result.invoice.fields.vendor_id, 'v2')
+  assert.equal(result.invoice.fields.vendor_id, 'v1')
   assert.equal(result.invoice.fields.invoice_number, '001')
   assert.equal(result.tax_invoices[0].fields.vendor_id, 'other-source-vendor')
-  assert.equal(result.tax_invoices[0].fields.store_id, 's2')
-  assert.equal(result.supporting_documents[0].fields.contract_number, 'c2')
+  assert.equal(result.tax_invoices[0].fields.store_id, 's1')
+  assert.equal(result.supporting_documents[0].fields.contract_number, undefined)
+  assert.deepEqual(result.identity, identity)
   assert.deepEqual(result.tax_invoices[0].evidence, pkg.tax_invoices[0].evidence)
   assert.equal(pkg.invoice.fields.vendor_id, 'v1')
 })

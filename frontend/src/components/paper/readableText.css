@@ -1,0 +1,206 @@
+.paper-text-reader {
+  min-width: 0;
+  border-radius: 0.5rem;
+  background: rgb(var(--surface-muted));
+  padding: 0.75rem;
+}
+
+.paper-text-reader-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.85rem;
+}
+
+.paper-text-reader-controls button {
+  padding: 0.3rem 0.65rem;
+  font-size: 0.75rem;
+}
+
+.paper-text-reader-content,
+.paper-readable-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.paper-readable-text {
+  color: rgb(var(--ink));
+  font-size: 0.875rem;
+  line-height: 1.75;
+  white-space: normal;
+}
+
+.paper-readable-text p {
+  margin: 0 0 0.9em;
+  white-space: pre-line;
+}
+
+.paper-readable-text > :last-child,
+.paper-readable-text li > :last-child {
+  margin-bottom: 0;
+}
+
+.paper-readable-text :is(h1, h2, h3, h4, h5, h6) {
+  margin: 1.2em 0 0.6em;
+  font-size: 1em;
+  font-weight: 650;
+  line-height: 1.45;
+}
+
+.paper-readable-text > :first-child {
+  margin-top: 0;
+}
+
+.paper-readable-text :is(ul, ol),
+.paper-clause-list {
+  margin: 0.6em 0 1em;
+  padding-inline-start: 1.5rem;
+}
+
+.paper-readable-text ul {
+  list-style-type: disc;
+}
+
+.paper-readable-text ol,
+.paper-clause-list {
+  list-style-type: decimal;
+}
+
+.paper-readable-text li,
+.paper-clause-list > li {
+  padding-inline-start: 0.2rem;
+  margin-bottom: 0.65em;
+}
+
+.paper-readable-text blockquote {
+  border-inline-start: 2px solid rgb(var(--surface-border));
+  margin: 0.75em 0;
+  padding-inline-start: 0.8rem;
+}
+
+.paper-readable-text hr {
+  border-color: rgb(var(--surface-border));
+  margin: 1em 0;
+}
+
+.paper-readable-text pre,
+.paper-raw-text {
+  max-width: 100%;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, monospace;
+  font-size: 0.75rem;
+  line-height: 1.65;
+  margin: 0;
+}
+
+.paper-readable-text code {
+  font-family: ui-monospace, monospace;
+  font-size: 0.9em;
+}
+
+.paper-readable-table {
+  max-width: 100%;
+  overflow-x: auto;
+  margin: 0.8em 0;
+}
+
+.paper-readable-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+
+.paper-readable-table :is(th, td) {
+  padding: 0.5rem 0.65rem;
+  border: 1px solid rgb(var(--surface-border));
+  text-align: start;
+  vertical-align: top;
+}
+
+.paper-readable-table th {
+  font-weight: 600;
+}
+
+.paper-text-reader-note {
+  margin: 0.85rem 0 0;
+  color: rgb(var(--ink-muted));
+  font-size: 0.6875rem;
+  line-height: 1.5;
+}
+
+.paper-narrative-value {
+  white-space: normal;
+}
+
+.paper-readonly-field,
+.paper-clause-editor-item {
+  min-width: 0;
+  border: 1px solid rgb(var(--surface-border));
+  border-radius: 0.65rem;
+  padding: 0.85rem;
+  background: rgb(var(--surface));
+}
+
+.paper-field-value {
+  color: rgb(var(--ink));
+  font-size: 0.875rem;
+  line-height: 1.75;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.paper-clause-input {
+  min-height: 8rem;
+  resize: vertical;
+  line-height: 1.75;
+}
+
+.paper-value-properties {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(15rem, 100%), 1fr));
+  gap: 0.7rem;
+  margin: 0;
+}
+
+.paper-value-property {
+  min-width: 0;
+  padding: 0.65rem;
+  border-radius: 0.5rem;
+  background: rgb(var(--surface-muted));
+}
+
+.paper-value-property dd {
+  margin: 0.35rem 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.paper-value-label {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: rgb(var(--ink-muted));
+}
+
+.paper-structured-list {
+  display: grid;
+  gap: 0.85rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.paper-structured-list > li > .paper-value-label {
+  margin-bottom: 0.5rem;
+}
+
+.paper-structured-value > .paper-disclosure,
+.paper-narrative-value > .paper-disclosure {
+  margin-top: 0.75rem;
+}

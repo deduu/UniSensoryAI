@@ -10,15 +10,9 @@ export function replacePackage(value) {
   return result
 }
 
-/** Explicit sample handoff retains any identifiers that disagree with the old identity. */
+/** Assign canonical routing IDs without manufacturing values in source documents. */
 export function applyPackageIdentity(value, identity) {
   const result = replacePackage(value)
-  const documents = [result.invoice, ...result.tax_invoices, ...result.utility_statements, ...result.supporting_documents]
-  for (const document of documents) {
-    for (const key of ['vendor_id', 'store_id', 'contract_number']) {
-      if (!document.fields[key] || document.fields[key] === result.identity[key]) document.fields[key] = identity[key]
-    }
-  }
   result.identity = { ...identity }
   return result
 }
@@ -28,6 +22,7 @@ export function reviewEligibility(version, latestVersion, context, selectedCodes
   if (!context?.can_decide_cases) reason = 'Your account does not have AP review permission.'
   else if (!version || version.version_number !== latestVersion) reason = 'Select the latest case version to record a decision.'
   else if (version.decision) reason = 'This version already has a recorded decision.'
+  else if (context.policy_id && context.policy_version && (version.assessment?.policy_id !== context.policy_id || version.assessment?.policy_version !== context.policy_version)) reason = 'The matching requirements or policy have changed. Reassess this case before recording a decision.'
   else if (context.require_independent_case_approval && version.created_by === context.user_id) reason = 'A different reviewer must decide this version.'
   const canDecide = !reason
   const codes = uniqueFindingCodes(version)

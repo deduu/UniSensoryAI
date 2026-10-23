@@ -1,0 +1,21 @@
+.paper-issue-list { display: grid; gap: 0.5rem; }
+.paper-issue-row { min-width: 0; padding: 0.65rem; border: 1px solid rgb(var(--surface-border)); border-radius: 0.65rem; background: rgb(var(--surface)); font-size: 0.75rem; line-height: 1.5; overflow-wrap: anywhere; }
+.paper-issue-row--attention, .paper-issue-row--mixed { border-inline-start: 3px solid #f59e0b; }
+.paper-issue-row--history { background: rgb(var(--surface-muted)); }
+.paper-issue-row-header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0.25rem 0.65rem; }
+.paper-issue-row-header h4 { margin: 0; font-size: 0.875rem; font-weight: 650; color: rgb(var(--ink)); }
+.paper-issue-row-header > span { font-size: 0.625rem; color: rgb(var(--ink-muted)); }
+.paper-issue-actions-list { display: grid; gap: 0.45rem; margin-top: 0.45rem; }
+.paper-issue-summary p { margin: 0; }
+.paper-issue-next { margin-top: 0.2rem !important; color: rgb(var(--ink-muted)); }
+.paper-issue-next > span { font-weight: 600; color: rgb(var(--ink)); }
+.paper-issue-shortcuts { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.45rem; }
+.paper-issue-shortcuts:empty { display: none; }
+.paper-issue-details { margin-top: 0.45rem; font-size: 0.6875rem; }
+.paper-issue-details summary { cursor: pointer; color: rgb(var(--ink-muted)); }
+.paper-issue-path { margin: 0.65rem 0; color: rgb(var(--ink-muted)); }
+.paper-issue-current { padding: 0.65rem; border-radius: 0.5rem; background: rgb(var(--surface-muted)); max-height: 14rem; overflow: auto; }
+.paper-issue-current h5, .paper-issue-retained h5 { margin: 0 0 0.4rem; font-weight: 600; }
+.paper-issue-retained { margin-top: 0.8rem; padding-top: 0.65rem; border-top: 1px solid rgb(var(--surface-border)); }
+.paper-issue-retained p { margin: 0.45rem 0; white-space: pre-wrap; }
+.paper-issue-retained pre { margin-top: 0.6rem; white-space: pre-wrap; overflow-wrap: anywhere; }

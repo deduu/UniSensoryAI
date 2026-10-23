@@ -89,7 +89,8 @@ export function projectReviewItems(record, options = {}) {
   }
 }
 
-function pointerValue(data, pointer) {
+/** Resolve a current value by exact JSON pointer without substituting retained candidates. */
+export function reviewFieldValue(data, pointer) {
   if (typeof pointer !== 'string' || !pointer.startsWith('/')) return undefined
   let value = data
   for (const token of pointer.slice(1).split('/')) {
@@ -113,7 +114,7 @@ export function reviewPage(record, pageNumber, options = {}) {
     page,
     text: (page?.text_blocks || []).map(block => block.text).filter(text => typeof text === 'string' && text.trim()).join('\n\n'),
     evidence,
-    fields: paths.map(fieldPath => ({ fieldPath, value: pointerValue(data, fieldPath) })),
+    fields: paths.map(fieldPath => ({ fieldPath, value: reviewFieldValue(data, fieldPath) })),
     unlinkedEvidenceCount: linked.filter(item => !item.pages.length).length,
   }
 }

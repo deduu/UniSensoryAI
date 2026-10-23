@@ -2,6 +2,114 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createPaperApi, paperApi } from '../src/api/paper.js'
 
+test('field requirement settings use the selected server and preserve revision and typed conditions', async () => {
+  const original = globalThis.fetch
+  const calls = []
+  const payload = { expected_revision: 3, requirements: [{ role: 'supporting_document', field: 'reference_number', requirement: 'conditional', reason: 'Certificate reference is needed.', when: { role: 'supporting_document', field: 'document_type', operator: 'equals', value: 'withholding_certificate' } }] }
+  globalThis.fetch = async (url, options) => { calls.push({ url, options }); return { ok: true, json: async () => ({ revision: 4 }) } }
+  try {
+    const api = createPaperApi('https://configured.local/')
+    await api.fieldRequirements({ baseUrl: 'https://unrelated.local' })
+    const result = await api.saveFieldRequirements(payload)
+    assert.equal(calls[0].url, 'https://configured.local/v1/paper/field-requirements')
+    assert.equal(calls[0].options.method, 'GET')
+    assert.equal(calls[1].url, calls[0].url)
+    assert.equal(calls[1].options.method, 'PUT')
+    assert.deepEqual(JSON.parse(calls[1].options.body), payload)
+    assert.equal(result.revision, 4)
+  } finally { globalThis.fetch = original }
+})
+
+test('saved drafts and explicit preparation use independent host-bound endpoints', async () => {
+  const original = globalThis.fetch
+  const calls = []
+  globalThis.fetch = async (url, options) => { calls.push({ url, options }); return { ok: true, json: async () => ({}) } }
+  try {
+    const api = createPaperApi('https://configured.local')
+    await api.listDocumentDrafts({ q: 'INV one', role: 'tax_invoice', status: 'reviewed', limit: 8, offset: 16 })
+    await api.createDocumentDraft({ role: 'rent_invoice', reviewed: false })
+    await api.reviseDocumentDraft('draft/a', { expected_version: 2, reviewed: true })
+    await api.documentDraftVersion('draft/a', 2)
+    await api.documentDraftVersions('draft/a', { limit: 20 })
+    await api.caseReadiness({ invoice: { draft_id: 'draft/a', version_number: 2 } })
+    await api.reconcileDraftSelection({ invoice: { draft_id: 'draft/a', version_number: 2 } })
+    assert.equal(calls[0].url, 'https://configured.local/v1/paper/document-drafts?q=INV+one&role=tax_invoice&status=reviewed&limit=8&offset=16')
+    assert.equal(calls[1].url, 'https://configured.local/v1/paper/document-drafts')
+    assert.equal(calls[2].url, 'https://configured.local/v1/paper/document-drafts/draft%2Fa/versions')
+    assert.equal(calls[3].url, 'https://configured.local/v1/paper/document-drafts/draft%2Fa/versions/2')
+    assert.equal(calls[4].url, 'https://configured.local/v1/paper/document-drafts/draft%2Fa/versions?limit=20&offset=0')
+    assert.equal(calls[5].url, 'https://configured.local/v1/paper/cases/preparation/readiness')
+    assert.equal(calls[6].url, 'https://configured.local/v1/paper/cases/from-drafts')
+    assert.equal(calls[1].options.method, 'POST')
+    assert.equal(JSON.parse(calls[1].options.body).reviewed, false)
+  } finally { globalThis.fetch = original }
+})
+
+test('workspace indexes pass server filters separately from HTTP options without writes', async () => {
+  const original = globalThis.fetch
+  const requests = []
+  globalThis.fetch = async (url, options) => {
+    requests.push({ url, options })
+    return { ok: true, json: async () => ({ items: [], total: 0, limit: 20, offset: 0 }) }
+  }
+  try {
+    const api = createPaperApi('https://workspace.local')
+    await api.workspaceCases({ q: 'A & B', status: 'incomplete', agreement_id: 'contract/a', limit: 20, offset: 40 })
+    await api.workspaceContracts({ q: '65', status: 'approved' })
+    await api.workspaceDocuments({ job_id: 'job/a', archived: true })
+    const query = new URL(requests[0].url).searchParams
+    assert.equal(new URL(requests[0].url).pathname, '/v1/paper/workspace/cases')
+    assert.equal(query.get('q'), 'A & B')
+    assert.equal(query.get('agreement_id'), 'contract/a')
+    assert.equal(query.get('offset'), '40')
+    assert.equal(new URL(requests[1].url).searchParams.get('status'), 'approved')
+    assert.equal(new URL(requests[2].url).searchParams.get('job_id'), 'job/a')
+    assert.equal(new URL(requests[2].url).searchParams.get('archived'), 'true')
+    requests.forEach(({ options }) => {
+      assert.equal(options.method, 'GET')
+      assert.equal(options.q, undefined)
+      assert.equal(options.agreement_id, undefined)
+      assert.equal(options.body, undefined)
+    })
+  } finally { globalThis.fetch = original }
+})
+
+test('extraction archiving and restoring are explicit tenant-bound operations and refresh history', async () => {
+  const original = globalThis.fetch
+  const requests = []
+  const changed = []
+  globalThis.fetch = async (url, options) => { requests.push({ url, options }); return { ok: true, json: async () => [{ job_id: 'saved' }] } }
+  try {
+    const api = createPaperApi('https://configured.local', { onExtractionChanged: result => changed.push(result) })
+    await api.listExtractions({ archived: true, limit: 10, offset: 0 })
+    await api.archiveExtractions(['job/a'], true)
+    await api.archiveExtractions(['job/a'], false)
+    assert.equal(requests[0].url, 'https://configured.local/v1/paper/extractions?limit=10&offset=0&archived=true')
+    assert.equal(requests[1].url, 'https://configured.local/v1/paper/extractions/archive')
+    assert.equal(requests[1].options.method, 'POST')
+    assert.deepEqual(JSON.parse(requests[1].options.body), { job_ids: ['job/a'], archived: true })
+    assert.deepEqual(JSON.parse(requests[2].options.body), { job_ids: ['job/a'], archived: false })
+    assert.equal(changed.length, 2)
+  } finally { globalThis.fetch = original }
+})
+
+test('candidate search sends source fields to the selected host without assigning identity', async () => {
+  const original = globalThis.fetch
+  const requests = []
+  globalThis.fetch = async (url, options) => {
+    requests.push({ url, options })
+    return { ok: true, json: async () => ({ candidates: [], state: 'no_match' }) }
+  }
+  const payload = { invoice: { source_document_id: 'invoice', fields: { vendor_id: null } }, offset: 0, limit: 25 }
+  try {
+    await createPaperApi('https://host.local').associationCandidates(payload)
+    assert.equal(requests[0].url, 'https://host.local/v1/paper/cases/association/candidates')
+    assert.equal(requests[0].options.method, 'POST')
+    assert.deepEqual(JSON.parse(requests[0].options.body), payload)
+    assert.equal(payload.invoice.fields.vendor_id, null)
+  } finally { globalThis.fetch = original }
+})
+
 test('PAPER API uses encoded identifiers, JSON requests, and configured base URL', async () => {
   const original = globalThis.fetch
   const requests = []
@@ -42,8 +150,10 @@ test('PAPER catalog, history and review-context reads remain read-only', async (
     await paperApi.listAgreements()
     await paperApi.agreementVersions('agreement')
     await paperApi.caseVersions('case')
+    await paperApi.extractionByDocument('document/id')
     for (const request of requests) assert.equal(request.options.method, 'GET')
     assert.equal(requests[2].url, '/v1/paper/review-context')
+    assert.equal(requests[6].url, '/v1/paper/extractions/by-document/document%2Fid')
   } finally { globalThis.fetch = original }
 })
 

@@ -1,7 +1,11 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
-import { applyFieldValue, fieldDefinitions, jsonEditorValidity, parseStructuredValue } from '../../paper/helpers.js'
+import { applyFieldValue, fieldDefinitions, jsonEditorValidity, parseStructuredValue, resolveSchema } from '../../paper/helpers.js'
 import Button from '../ui/Button'
 import FieldSourceLinks from './FieldSourceLinks'
+import CanonicalValue from './CanonicalValue.js'
+import { appendPointer, canEditStringList, editStringList, textRows } from './readableFields.js'
+import { isMoneyField } from '../../paper/monetaryFields.js'
+import MoneyInput from './MoneyInput.jsx'
 
 const inputClass = 'w-full rounded-lg border border-surface-border bg-surface px-3 py-2 text-sm text-ink focus:border-brand focus:ring-brand disabled:bg-surface-muted disabled:opacity-70'
 
@@ -14,7 +18,7 @@ export function revealInvalidField(event) {
   }
 }
 
-function StructuredField({ definition, value, onChange, disabled, id }) {
+function StructuredField({ definition, value, onChange, disabled, id, onPendingChange }) {
   const fallback = definition.nullable ? null : definition.type === 'array' ? [] : {}
   const effectiveValue = value === undefined ? fallback : value
   const control = useRef(null)
@@ -27,6 +31,7 @@ function StructuredField({ definition, value, onChange, disabled, id }) {
   }, [value, definition.type, definition.nullable])
 
   useEffect(() => { control.current?.setCustomValidity(disabled ? '' : validity) }, [disabled, validity])
+  useEffect(() => { onPendingChange?.(Boolean(validity)) }, [onPendingChange, validity])
 
   function apply() {
     try {
@@ -59,8 +64,39 @@ function StructuredField({ definition, value, onChange, disabled, id }) {
   )
 }
 
+/** Edit source clauses directly while retaining an explicit advanced JSON alternative. */
+function StringListField({ definition, value, onChange, disabled, id, fieldPath }) {
+  const [pending, setPending] = useState(false)
+  const items = Array.isArray(value) ? value : []
+  const locked = disabled || pending
+  const update = action => onChange(editStringList(value, action))
+  return <div className="paper-clause-editor space-y-3">
+    {value == null && <p className="text-sm italic text-ink-faint">Unknown / not provided</p>}
+    {Array.isArray(value) && !items.length && <p className="text-sm text-ink-muted">No clauses. This is an empty list, rather than unknown.</p>}
+    {items.map((text, index) => <div key={index} data-review-field={appendPointer(fieldPath, index)} className="paper-clause-editor-item">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <label htmlFor={`${id}-${index}`} className="text-xs font-medium text-ink-muted">Clause {index + 1}</label>
+        <FieldSourceLinks fieldPath={appendPointer(fieldPath, index)} label={`${definition.label.toLowerCase()}, clause ${index + 1}`} />
+      </div>
+      <textarea id={`${id}-${index}`} className={`${inputClass} paper-clause-input`} value={text} rows={textRows(text)} disabled={locked}
+        onChange={event => update({ type: 'replace', index, text: event.target.value })} onInvalid={revealInvalidField} />
+      <Button type="button" variant="ghost" className="mt-1 !px-2 !py-1 text-xs" disabled={locked} onClick={() => update({ type: 'remove', index })}>Remove clause {index + 1}</Button>
+    </div>)}
+    <div className="flex flex-wrap gap-2">
+      <Button type="button" variant="secondary" className="!px-3 !py-1.5 text-xs" disabled={locked} onClick={() => update({ type: 'append' })}>Add clause</Button>
+      {definition.nullable && <Button type="button" variant="ghost" className="!px-3 !py-1.5 text-xs" disabled={locked || value == null} onClick={() => onChange(null)}>Set unknown</Button>}
+      {value == null && <Button type="button" variant="ghost" className="!px-3 !py-1.5 text-xs" disabled={locked} onClick={() => onChange([])}>Set empty list</Button>}
+    </div>
+    <details className="paper-disclosure">
+      <summary className="text-xs">Advanced JSON editor</summary>
+      <div className="mt-3"><StructuredField definition={definition} value={value} onChange={onChange} disabled={disabled} id={`${id}-json`} onPendingChange={setPending} /></div>
+    </details>
+    {pending && <p className="text-xs text-amber-700 dark:text-amber-400">Apply or discard the JSON edits before editing clauses or saving.</p>}
+  </div>
+}
+
 /** Render the server's schema, preserving strings, nulls, and extension objects. */
-export function SchemaFields({ schema, value = {}, onChange, disabled = false, idPrefix, exclude = [], only }) {
+export function SchemaFields({ schema, value = {}, onChange, disabled = false, idPrefix, exclude = [], only, requirements = [], requiredFields = [] }) {
   const generatedId = useId()
   const prefix = idPrefix || generatedId
   const fields = useMemo(() => fieldDefinitions(schema), [schema])
@@ -86,16 +122,23 @@ export function SchemaFields({ schema, value = {}, onChange, disabled = false, i
         const current = value[field.name]
         const structured = field.type === 'object' || field.type === 'array'
         const longText = !field.enum && field.type === 'string' && field.maxLength > 1000 && !field.format
+        const fieldPath = appendPointer('', field.name)
+        const listDefinition = { ...field, items: resolveSchema(field.items, schema?.json_schema || schema) }
         const descriptionId = `${id}-description`
         const common = {
           id, disabled, className: inputClass, onInvalid: revealInvalidField,
           'aria-describedby': `${field.description ? descriptionId : ''}${errors[field.name] ? ` ${id}-error` : ''}`.trim() || undefined,
           'aria-invalid': Boolean(errors[field.name]),
         }
+        const requirement = requirements.find(item => item.field === field.name)?.requirement || (requiredFields.includes(field.name) ? 'required' : 'optional')
         return (
-          <div key={field.name} data-review-field={`/${field.name.replaceAll('~', '~0').replaceAll('/', '~1')}`} className={`min-w-0 ${structured || longText ? 'md:col-span-2' : ''}`}>
-            <div className="mb-1.5 flex flex-wrap items-start justify-between gap-2"><label htmlFor={id} className="text-xs font-medium text-ink-muted">{field.label}</label><FieldSourceLinks fieldPath={`/${field.name.replaceAll('~', '~0').replaceAll('/', '~1')}`} label={field.label.toLowerCase()} /></div>
-            {structured ? (
+          <div key={field.name} data-review-field={fieldPath} className={`min-w-0 ${disabled ? 'paper-readonly-field' : ''} ${structured || longText ? 'md:col-span-2' : ''}`}>
+            <div className="mb-1.5 flex flex-wrap items-start justify-between gap-2"><div className="flex flex-wrap items-center gap-2">{disabled ? <p id={`${id}-label`} className="text-xs font-medium text-ink-muted">{field.label}</p> : <label htmlFor={id} className="text-xs font-medium text-ink-muted">{field.label}</label>}{(requirements.length > 0 || requiredFields.length > 0) && <span className="text-[10px] capitalize text-ink-faint">{requirement}</span>}</div><FieldSourceLinks fieldPath={fieldPath} label={field.label.toLowerCase()} /></div>
+            {disabled ? <div aria-labelledby={`${id}-label`} className="paper-field-value"><CanonicalValue value={current} currency={value.currency} formatted={longText} fieldPath={fieldPath} renderSourceLinks={(path, label) => <FieldSourceLinks fieldPath={path} label={`${field.label.toLowerCase()}, ${label}`} />} /></div> : isMoneyField(fieldPath) ? (
+              <MoneyInput {...common} value={current ?? ''} currency={value.currency} onChange={raw => change(field, raw)} />
+            ) : structured && canEditStringList(listDefinition, current) ? (
+              <StringListField definition={listDefinition} value={current} disabled={disabled} id={id} fieldPath={fieldPath} onChange={parsed => onChange({ ...value, [field.name]: parsed })} />
+            ) : structured ? (
               <StructuredField definition={field} value={current} disabled={disabled} id={id} onChange={parsed => onChange({ ...value, [field.name]: parsed })} />
             ) : field.enum ? (
               <select {...common} value={current ?? ''} onChange={event => change(field, event.target.value)}>
@@ -107,7 +150,7 @@ export function SchemaFields({ schema, value = {}, onChange, disabled = false, i
                 <option value="">Unknown / not provided</option><option value="true">Yes</option><option value="false">No</option>
               </select>
             ) : longText ? (
-              <textarea {...common} rows={2} value={current ?? ''} maxLength={field.maxLength} onChange={event => change(field, event.target.value)} />
+              <textarea {...common} className={`${inputClass} paper-clause-input`} rows={textRows(current)} value={current ?? ''} maxLength={field.maxLength} onChange={event => change(field, event.target.value)} />
             ) : (
               <input
                 {...common} value={current ?? ''} maxLength={field.maxLength}

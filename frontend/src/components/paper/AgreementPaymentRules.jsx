@@ -1,10 +1,12 @@
 import SchemaFields from './SchemaFields'
+import MoneyInput from './MoneyInput'
+import { formatMoney } from '../../paper/money'
 import { assertSavedInstallmentIds, patchInstallment, patchPaymentRule, removeInstallment } from '../../paper/installmentRules'
 
 export const AGREEMENT_PAYMENT_FIELDS = ['installment_schedule', 'withholding_policy']
 
-function Field({ label, value, onChange, type = 'text', required = true, ...rest }) {
-  return <label className="block text-xs font-medium text-ink-muted">{label}<input className="paper-input mt-1" type={type} value={value ?? ''} required={required} onChange={event => onChange(event.target.value)} {...rest} /></label>
+function Field({ label, value, onChange, type = 'text', required = true, money = false, currency, ...rest }) {
+  return <label className="block text-xs font-medium text-ink-muted">{label}{money ? <MoneyInput aria-label={label} className="paper-input mt-1" value={value ?? ''} currency={currency} required={required} onChange={onChange} {...rest} /> : <input className="paper-input mt-1" type={type} value={value ?? ''} required={required} onChange={event => onChange(event.target.value)} {...rest} />}</label>
 }
 
 /** Reviewed versioned payment rules; source rent price and narrative remain intact. */
@@ -14,8 +16,13 @@ export default function AgreementPaymentRules({ schema, terms, onChange = () => 
   const setRule = (key, changes) => onChange(assertSavedInstallmentIds(patchPaymentRule(terms, key, changes), savedInstallmentIds))
   const setItem = (index, changes) => onChange(patchInstallment(terms, index, changes))
   const addItem = () => setRule('installment_schedule', { installments: [...(schedule?.installments || []), { installment_id: '', gross_amount: '', coverage_start: '', coverage_end: '', conditions: [] }] })
+  if (disabled) return <section aria-label="Installment and withholding rules" className="min-w-0 space-y-4 rounded-xl border border-surface-border p-4">
+    <div><h3 className="font-semibold text-ink">Installment and withholding rules</h3><p className="mt-1 text-xs text-ink-muted">Reviewed allocation and tax settings are separate from the printed payment narrative. Unknown settings require an explicit review decision.</p></div>
+    {schedule?.source_discrepancy_note && <p className="paper-notice break-words">Source discrepancy requiring review: {schedule.source_discrepancy_note}</p>}
+    <SchemaFields schema={schema} value={terms} disabled only={AGREEMENT_PAYMENT_FIELDS} idPrefix="payment-rules-read" />
+  </section>
   return <section aria-label="Installment and withholding rules" className="min-w-0 space-y-4 rounded-xl border border-surface-border p-4">
-    <div><h3 className="font-semibold text-ink">Installment and withholding rules</h3><p className="mt-1 text-sm text-ink-muted">{schedule ? `${schedule.installments?.length || 0} installments · ${schedule.currency || 'Currency unknown'} ${schedule.total_gross || 'Amount unknown'} gross` : 'No installment schedule'}{policy ? ` · Withholding rate ${policy.rate || 'unknown'}` : ''}</p></div>
+    <div><h3 className="font-semibold text-ink">Installment and withholding rules</h3><p className="mt-1 text-sm text-ink-muted">{schedule ? `${schedule.installments?.length || 0} installments · ${schedule.total_gross === '' || schedule.total_gross == null ? 'Amount unknown' : formatMoney(schedule.total_gross, schedule.currency)} gross${schedule.currency ? '' : ' · Currency unknown'}` : 'No installment schedule'}{policy ? ` · Withholding rate ${policy.rate || 'unknown'}` : ''}</p></div>
     {disabled && schedule?.source_discrepancy_note && <p className="paper-notice break-words">Source discrepancy requiring review: {schedule.source_discrepancy_note}</p>}
     <details className="paper-disclosure" open={!disabled || undefined}><summary className="text-sm font-medium text-ink">{disabled ? 'Review payment rules and conditions' : 'Edit payment rules'}</summary><div className="mt-4 space-y-4">
     <details className="text-xs text-ink-muted"><summary>How these rules are used</summary><p className="mt-2 leading-5">These rules belong to this agreement version. Keep the source annual price and payment conditions. Review tax treatment and rounding explicitly before approval. Allocation dates are reviewed accounting coverage, not invoice service dates or contractual due dates.</p></details>
@@ -29,14 +36,14 @@ export default function AgreementPaymentRules({ schema, terms, onChange = () => 
         </div><Field label="Schedule source reference" value={schedule.source_reference} onChange={value => setRule('installment_schedule', { source_reference: value })} /></div></details>
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Schedule currency" value={schedule.currency} maxLength={3} onChange={value => setRule('installment_schedule', { currency: value })} />
-          <Field label="Stated total gross rent" value={schedule.total_gross} inputMode="decimal" onChange={value => setRule('installment_schedule', { total_gross: value })} />
+          <Field label="Stated total gross rent" value={schedule.total_gross} money currency={schedule.currency} onChange={value => setRule('installment_schedule', { total_gross: value })} />
         </div>
         <label className="block text-xs font-medium text-ink-muted">Source discrepancy note<textarea className="paper-input mt-1" rows={2} value={schedule.source_discrepancy_note ?? ''} onChange={event => setRule('installment_schedule', { source_discrepancy_note: event.target.value || null })} /></label>
         {(schedule.installments || []).map((item, index) => <div key={index} className="space-y-3 rounded-lg border border-surface-border p-3">
           <div className="flex items-center justify-between gap-2"><h5 className="text-sm font-semibold">Installment {index + 1}</h5>{!disabled && !savedInstallmentIds.includes(item.installment_id) && <button type="button" className="paper-secondary" onClick={() => onChange(removeInstallment(terms, index))}>Remove installment {index + 1}</button>}</div>
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label={`Installment ${index + 1} ID`} value={item.installment_id} disabled={savedInstallmentIds.includes(item.installment_id)} onChange={value => setItem(index, { installment_id: value })} />
-            <Field label={`Installment ${index + 1} gross amount`} value={item.gross_amount} inputMode="decimal" onChange={value => setItem(index, { gross_amount: value })} />
+            <Field label={`Installment ${index + 1} gross amount`} value={item.gross_amount} money currency={schedule.currency} onChange={value => setItem(index, { gross_amount: value })} />
             <Field label={`Installment ${index + 1} allocation start`} type="date" value={item.coverage_start} onChange={value => setItem(index, { coverage_start: value })} />
             <Field label={`Installment ${index + 1} allocation end`} type="date" min={item.coverage_start || undefined} value={item.coverage_end} onChange={value => setItem(index, { coverage_end: value })} />
           </div>
